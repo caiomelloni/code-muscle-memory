@@ -1,0 +1,77 @@
+[
+  {
+    "id": "go-001-hello",
+    "title": "Return a greeting",
+    "description": "Implement Hello so it returns a friendly greeting for the provided name. If the name is empty, greet World.",
+    "objective": "Practice defining a function, using strings, and returning values.",
+    "difficulty": 1,
+    "language": "go",
+    "topic": "functions",
+    "starter_code": "package exercise\n\nfunc Hello(name string) string {\n\treturn \"\"\n}\n",
+    "tests": "package exercise\n\nimport \"testing\"\n\nfunc TestHello(t *testing.T) {\n\ttests := []struct {\n\t\tname string\n\t\twant string\n\t}{\n\t\t{name: \"Chris\", want: \"Hello, Chris\"},\n\t\t{name: \"\", want: \"Hello, World\"},\n\t}\n\tfor _, tt := range tests {\n\t\tgot := Hello(tt.name)\n\t\tif got != tt.want {\n\t\t\tt.Fatalf(\"Hello(%q) = %q, want %q\", tt.name, got, tt.want)\n\t\t}\n\t}\n}\n",
+    "solution": "package exercise\n\nfunc Hello(name string) string {\n\tif name == \"\" {\n\t\tname = \"World\"\n\t}\n\treturn \"Hello, \" + name\n}\n",
+    "metadata": {
+      "source": "Learn Go With Tests - Hello, world"
+    }
+  },
+  {
+    "id": "go-002-integers",
+    "title": "Add two integers",
+    "description": "Implement Add so it returns the sum of two integers.",
+    "objective": "Practice integer parameters, return types, and simple arithmetic.",
+    "difficulty": 1,
+    "language": "go",
+    "topic": "integers",
+    "starter_code": "package exercise\n\nfunc Add(a, b int) int {\n\treturn 0\n}\n",
+    "tests": "package exercise\n\nimport \"testing\"\n\nfunc TestAdd(t *testing.T) {\n\tgot := Add(2, 3)\n\twant := 5\n\tif got != want {\n\t\tt.Fatalf(\"Add(2, 3) = %d, want %d\", got, want)\n\t}\n}\n",
+    "solution": "package exercise\n\nfunc Add(a, b int) int {\n\treturn a + b\n}\n",
+    "metadata": {
+      "source": "Learn Go With Tests - Integers"
+    }
+  },
+  {
+    "id": "go-003-iteration",
+    "title": "Repeat a string",
+    "description": "Implement Repeat so it returns the provided character repeated count times.",
+    "objective": "Practice for loops and string concatenation.",
+    "difficulty": 2,
+    "language": "go",
+    "topic": "iteration",
+    "starter_code": "package exercise\n\nfunc Repeat(character string, count int) string {\n\treturn \"\"\n}\n",
+    "tests": "package exercise\n\nimport \"testing\"\n\nfunc TestRepeat(t *testing.T) {\n\tgot := Repeat(\"a\", 5)\n\twant := \"aaaaa\"\n\tif got != want {\n\t\tt.Fatalf(\"Repeat returned %q, want %q\", got, want)\n\t}\n\tif got := Repeat(\"b\", 0); got != \"\" {\n\t\tt.Fatalf(\"Repeat with zero count returned %q, want empty string\", got)\n\t}\n}\n",
+    "solution": "package exercise\n\nfunc Repeat(character string, count int) string {\n\tvar repeated string\n\tfor i := 0; i < count; i++ {\n\t\trepeated += character\n\t}\n\treturn repeated\n}\n",
+    "metadata": {
+      "source": "Learn Go With Tests - Iteration"
+    }
+  },
+  {
+    "id": "go-004-arrays-slices",
+    "title": "Sum a slice",
+    "description": "Implement Sum so it returns the total of every integer in the provided slice.",
+    "objective": "Practice slices, range loops, and accumulation.",
+    "difficulty": 2,
+    "language": "go",
+    "topic": "slices",
+    "starter_code": "package exercise\n\nfunc Sum(numbers []int) int {\n\treturn 0\n}\n",
+    "tests": "package exercise\n\nimport \"testing\"\n\nfunc TestSum(t *testing.T) {\n\ttests := []struct {\n\t\tnumbers []int\n\t\twant    int\n\t}{\n\t\t{numbers: []int{1, 2, 3, 4, 5}, want: 15},\n\t\t{numbers: []int{}, want: 0},\n\t}\n\tfor _, tt := range tests {\n\t\tif got := Sum(tt.numbers); got != tt.want {\n\t\t\tt.Fatalf(\"Sum(%v) = %d, want %d\", tt.numbers, got, tt.want)\n\t\t}\n\t}\n}\n",
+    "solution": "package exercise\n\nfunc Sum(numbers []int) int {\n\ttotal := 0\n\tfor _, number := range numbers {\n\t\ttotal += number\n\t}\n\treturn total\n}\n",
+    "metadata": {
+      "source": "Learn Go With Tests - Arrays and slices"
+    }
+  },
+  {
+    "id": "go-005-structs-methods",
+    "title": "Calculate rectangle area",
+    "description": "Define an Area method on Rectangle that returns width multiplied by height.",
+    "objective": "Practice structs and methods.",
+    "difficulty": 3,
+    "language": "go",
+    "topic": "structs",
+    "starter_code": "package exercise\n\ntype Rectangle struct {\n\tWidth  float64\n\tHeight float64\n}\n\nfunc (r Rectangle) Area() float64 {\n\treturn 0\n}\n",
+    "tests": "package exercise\n\nimport \"testing\"\n\nfunc TestRectangleArea(t *testing.T) {\n\trectangle := Rectangle{Width: 12, Height: 6}\n\tgot := rectangle.Area()\n\twant := 72.0\n\tif got != want {\n\t\tt.Fatalf(\"Rectangle.Area() = %.2f, want %.2f\", got, want)\n\t}\n}\n",
+    "solution": "package exercise\n\ntype Rectangle struct {\n\tWidth  float64\n\tHeight float64\n}\n\nfunc (r Rectangle) Area() float64 {\n\treturn r.Width * r.Height\n}\n",
+    "metadata": {
+      "source": "Learn Go With Tests - Structs, methods and interfaces"
+    }
+  }
+]
