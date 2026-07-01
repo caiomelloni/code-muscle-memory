@@ -1,0 +1,109 @@
+package app
+
+import (
+	"os"
+	"strings"
+	"testing"
+	"time"
+
+	"code-muscle-memory/internal/exercise"
+	"code-muscle-memory/internal/scheduler"
+)
+
+func TestChooseNextPrefersNewExercises(t *testing.T) {
+	now := time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC)
+	exercises := []exercise.Exercise{
+		{ID: "go-002", Difficulty: 2},
+		{ID: "go-001", Difficulty: 1},
+	}
+	items := map[string]scheduler.Progress{
+		"go-001": {ExerciseID: "go-001", DueAt: now.Add(-time.Hour)},
+	}
+
+	got, ok := chooseNext(exercises, items, now)
+	if !ok {
+		t.Fatal("chooseNext returned false")
+	}
+	if got.ID != "go-002" {
+		t.Fatalf("chosen = %q, want go-002", got.ID)
+	}
+}
+
+func TestWriteStarterPrependsInstructions(t *testing.T) {
+	ex := exercise.Exercise{
+		Title:       "Return a greeting",
+		Description: "Implement Hello.",
+		Objective:   "Practice functions.",
+		StarterCode: "package exercise\n\nfunc Hello(name string) string { return \"\" }\n",
+	}
+
+	path, cleanup, err := writeStarter(ex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(data)
+	for _, want := range []string{
+		"// Return a greeting",
+		"// What to do: Implement Hello.",
+		"// Objective: Practice functions.",
+		"// Implement: a function called Hello, receives a parameter called name of type string, and returns a string",
+		"package exercise",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("starter file missing %q:\n%s", want, got)
+		}
+	}
+	if !strings.HasPrefix(got, "// Return a greeting") {
+		t.Fatalf("starter file should begin with instruction comments:\n%s", got)
+	}
+	if strings.Contains(got, "func Hello") || strings.Contains(got, "return \"\"") || strings.Contains(got, "{ return") {
+		t.Fatalf("starter file should not include starter code:\n%s", got)
+	}
+}
+
+func TestStarterInstructionsIncludeRequiredTypesAndMethods(t *testing.T) {
+	ex := exercise.Exercise{
+		Title:       "Calculate rectangle area",
+		Description: "Define an Area method.",
+		StarterCode: "package exercise\n\ntype Rectangle struct {\n\tWidth float64\n\tHeight float64\n}\n\nfunc (r Rectangle) Area() float64 {\n\treturn 0\n}\n",
+	}
+
+	got := starterWithInstructions(ex)
+	for _, want := range []string{
+		"// Implement: a struct type called Rectangle with a field called Width of type float64 and a field called Height of type float64",
+		"// Implement: a method called Area on Rectangle, receives no parameters, and returns a float64",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("starter instructions missing %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "func ") || strings.Contains(got, "return 0") {
+		t.Fatalf("starter file should not include method implementation:\n%s", got)
+	}
+}
+
+func TestChooseNextFallsBackToEarliestFutureDue(t *testing.T) {
+	now := time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC)
+	exercises := []exercise.Exercise{
+		{ID: "go-001", Difficulty: 1},
+		{ID: "go-002", Difficulty: 2},
+	}
+	items := map[string]scheduler.Progress{
+		"go-001": {ExerciseID: "go-001", DueAt: now.Add(48 * time.Hour)},
+		"go-002": {ExerciseID: "go-002", DueAt: now.Add(24 * time.Hour)},
+	}
+
+	got, ok := chooseNext(exercises, items, now)
+	if !ok {
+		t.Fatal("chooseNext returned false")
+	}
+	if got.ID != "go-002" {
+		t.Fatalf("chosen = %q, want go-002", got.ID)
+	}
+}
