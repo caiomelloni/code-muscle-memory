@@ -113,6 +113,107 @@ func TestGoExecutorTestWritingCompileError(t *testing.T) {
 	}
 }
 
+const flatSignTest = `package exercise
+
+import "testing"
+
+func TestSign(t *testing.T) {
+	if got := Sign(5); got != "positive" {
+		t.Fatalf("Sign(5) = %q, want %q", got, "positive")
+	}
+	if got := Sign(-5); got != "negative" {
+		t.Fatalf("Sign(-5) = %q, want %q", got, "negative")
+	}
+	if got := Sign(0); got != "zero" {
+		t.Fatalf("Sign(0) = %q, want %q", got, "zero")
+	}
+}
+`
+
+func TestGoExecutorTestWritingMissingSubtests(t *testing.T) {
+	ex := signExercise()
+	ex.RequiredTestFeatures = []string{exercise.FeatureSubtests}
+	result, err := NewGoExecutor().Evaluate(context.Background(), ex, flatSignTest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Status != MissingFeature {
+		t.Fatalf("Status = %s, want %s\n%s", result.Status, MissingFeature, result.Output)
+	}
+	if !strings.Contains(result.Output, "subtest") {
+		t.Fatalf("Output = %q, want it to mention subtests", result.Output)
+	}
+}
+
+func TestGoExecutorTestWritingMissingTable(t *testing.T) {
+	ex := signExercise()
+	ex.RequiredTestFeatures = []string{exercise.FeatureTable}
+	result, err := NewGoExecutor().Evaluate(context.Background(), ex, flatSignTest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Status != MissingFeature {
+		t.Fatalf("Status = %s, want %s\n%s", result.Status, MissingFeature, result.Output)
+	}
+}
+
+func TestGoExecutorTestWritingFeaturesSatisfied(t *testing.T) {
+	ex := signExercise()
+	ex.RequiredTestFeatures = []string{exercise.FeatureTable, exercise.FeatureSubtests}
+	testCode := `package exercise
+
+import "testing"
+
+func TestSign(t *testing.T) {
+	tests := []struct {
+		name string
+		n    int
+		want string
+	}{
+		{name: "positive", n: 5, want: "positive"},
+		{name: "negative", n: -5, want: "negative"},
+		{name: "zero", n: 0, want: "zero"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := Sign(tt.n); got != tt.want {
+				t.Fatalf("Sign(%d) = %q, want %q", tt.n, got, tt.want)
+			}
+		})
+	}
+}
+`
+	result, err := NewGoExecutor().Evaluate(context.Background(), ex, testCode)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Status != Success {
+		t.Fatalf("Status = %s, want %s\n%s", result.Status, Success, result.Output)
+	}
+}
+
+func TestGoExecutorTestWritingFeatureCheckedAfterCorrectness(t *testing.T) {
+	ex := signExercise()
+	ex.RequiredTestFeatures = []string{exercise.FeatureSubtests}
+	testCode := `package exercise
+
+import "testing"
+
+func TestSign(t *testing.T) {
+	if got := Sign(5); got != "negative" {
+		t.Fatalf("Sign(5) = %q, want %q", got, "negative")
+	}
+}
+`
+	result, err := NewGoExecutor().Evaluate(context.Background(), ex, testCode)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Status != TestFailure {
+		t.Fatalf("Status = %s, want %s\n%s", result.Status, TestFailure, result.Output)
+	}
+}
+
 func TestGoExecutorTestWritingFailsOnCorrectSubject(t *testing.T) {
 	ex := signExercise()
 	testCode := `package exercise

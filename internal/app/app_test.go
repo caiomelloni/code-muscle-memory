@@ -173,6 +173,29 @@ func TestStarterInstructionsForTestWritingUseGivenPrefix(t *testing.T) {
 	}
 }
 
+func TestStarterInstructionsIncludeRequiredTestFeatures(t *testing.T) {
+	ex := exercise.Exercise{
+		Title:                "Test FizzBuzz with named subtests",
+		Description:          "Write a test for FizzBuzz.",
+		Kind:                 exercise.KindTestWriting,
+		SubjectCode:          "package exercise\n\nfunc Double(n int) int {\n\treturn n * 2\n}\n",
+		RequiredTestFeatures: []string{exercise.FeatureTable, exercise.FeatureSubtests},
+	}
+
+	got := starterWithInstructions(ex)
+	for _, want := range []string{
+		"// Use: a table of test cases driven by a loop",
+		"// Use: named subtests, giving each case its own name",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("starter instructions missing %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "t.Run") {
+		t.Fatalf("starter instructions should not leak Go syntax:\n%s", got)
+	}
+}
+
 func TestChooseNextFallsBackToEarliestFutureDue(t *testing.T) {
 	now := time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC)
 	exercises := []exercise.Exercise{

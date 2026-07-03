@@ -116,6 +116,7 @@
       "misreports negative numbers as positive",
       "misreports zero as positive instead of zero"
     ],
+    "required_test_features": ["table"],
     "metadata": {
       "source": "Learn Go With Tests - Writing tests"
     }
@@ -140,6 +141,7 @@
       "does not treat multiples of 5 as Buzz",
       "returns an empty string instead of the number itself for values not divisible by 3 or 5"
     ],
+    "required_test_features": ["table", "subtests"],
     "metadata": {
       "source": "Learn Go With Tests - Writing tests"
     }

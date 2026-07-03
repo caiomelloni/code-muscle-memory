@@ -104,6 +104,49 @@ func TestValidateTestWritingMutantHintsLengthMismatch(t *testing.T) {
 	}
 }
 
+func TestValidateRequiredTestFeatures(t *testing.T) {
+	ex := Exercise{
+		ID:                   "go-008",
+		Title:                "A",
+		Description:          "desc",
+		Language:             "go",
+		Topic:                "topic",
+		Difficulty:           1,
+		Kind:                 KindTestWriting,
+		SubjectCode:          "package exercise",
+		Mutants:              []string{"package exercise"},
+		RequiredTestFeatures: []string{FeatureTable, FeatureSubtests},
+	}
+	if err := ex.Validate(); err != nil {
+		t.Fatalf("Validate() = %v, want success for known features", err)
+	}
+
+	ex.RequiredTestFeatures = []string{"bogus"}
+	err := ex.Validate()
+	if err == nil {
+		t.Fatal("Validate() succeeded, want error for unknown required test feature")
+	}
+	if !strings.Contains(err.Error(), "bogus") {
+		t.Fatalf("Validate() error = %q, want it to name the unknown feature", err)
+	}
+}
+
+func TestValidateRejectsRequiredTestFeaturesOnImplementation(t *testing.T) {
+	ex := Exercise{
+		ID:                   "go-001",
+		Title:                "A",
+		Description:          "desc",
+		Language:             "go",
+		Topic:                "topic",
+		Difficulty:           1,
+		Tests:                "package exercise",
+		RequiredTestFeatures: []string{FeatureTable},
+	}
+	if err := ex.Validate(); err == nil {
+		t.Fatal("Validate() succeeded, want error for required_test_features on implementation exercise")
+	}
+}
+
 func TestValidateRejectsUnknownKind(t *testing.T) {
 	ex := Exercise{
 		ID:          "go-001",

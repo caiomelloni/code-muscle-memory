@@ -124,6 +124,10 @@ func (a App) Next(ctx context.Context) error {
 		fmt.Fprintln(a.cfg.Stdout, "\nINCOMPLETE TEST")
 		fmt.Fprintln(a.cfg.Stdout, result.Output)
 		return a.saveAttempt(progress, ex.ID, string(solution))
+	case executor.MissingFeature:
+		fmt.Fprintln(a.cfg.Stdout, "\nMISSING STRUCTURE")
+		fmt.Fprintln(a.cfg.Stdout, result.Output)
+		return a.saveAttempt(progress, ex.ID, string(solution))
 	}
 
 	delete(progress.Attempts, ex.ID)
@@ -353,6 +357,9 @@ func kindInstructions(ex exercise.Exercise) []string {
 			instructions = append(instructions, "Given: "+target)
 		}
 		instructions = append(instructions, "Write: one or more functions whose names start with "+quoted("Test")+", each receiving a parameter called "+quoted("t")+" of type pointer to testing.T and returning nothing")
+		for _, feature := range ex.RequiredTestFeatures {
+			instructions = append(instructions, "Use: "+featureInstruction(feature))
+		}
 		return instructions
 	default:
 		var instructions []string
@@ -360,6 +367,19 @@ func kindInstructions(ex exercise.Exercise) []string {
 			instructions = append(instructions, "Implement: "+target)
 		}
 		return instructions
+	}
+}
+
+// featureInstruction phrases a required test feature as prose, describing the
+// concept without leaking the syntax the user is meant to recall.
+func featureInstruction(feature string) string {
+	switch feature {
+	case exercise.FeatureSubtests:
+		return "named subtests, giving each case its own name"
+	case exercise.FeatureTable:
+		return "a table of test cases driven by a loop"
+	default:
+		return feature
 	}
 }
 

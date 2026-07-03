@@ -15,22 +15,39 @@ const (
 	KindTestWriting    = "test_writing"
 )
 
+// Required test features are language-neutral concepts describing the shape a
+// user's test must have. Each language executor decides how to detect them.
+const (
+	FeatureSubtests = "subtests"
+	FeatureTable    = "table"
+)
+
+var knownTestFeatures = map[string]struct{}{
+	FeatureSubtests: {},
+	FeatureTable:    {},
+}
+
 type Exercise struct {
-	ID          string            `json:"id"`
-	Title       string            `json:"title"`
-	Description string            `json:"description"`
-	Objective   string            `json:"objective"`
-	Difficulty  int               `json:"difficulty"`
-	Language    string            `json:"language"`
-	Topic       string            `json:"topic"`
-	Kind        string            `json:"kind,omitempty"`
-	StarterCode string            `json:"starter_code"`
-	Tests       string            `json:"tests"`
-	Solution    string            `json:"solution,omitempty"`
-	SubjectCode string            `json:"subject_code,omitempty"`
-	Mutants     []string          `json:"mutants,omitempty"`
-	MutantHints []string          `json:"mutant_hints,omitempty"`
-	Metadata    map[string]string `json:"metadata,omitempty"`
+	ID          string   `json:"id"`
+	Title       string   `json:"title"`
+	Description string   `json:"description"`
+	Objective   string   `json:"objective"`
+	Difficulty  int      `json:"difficulty"`
+	Language    string   `json:"language"`
+	Topic       string   `json:"topic"`
+	Kind        string   `json:"kind,omitempty"`
+	StarterCode string   `json:"starter_code"`
+	Tests       string   `json:"tests"`
+	Solution    string   `json:"solution,omitempty"`
+	SubjectCode string   `json:"subject_code,omitempty"`
+	Mutants     []string `json:"mutants,omitempty"`
+	MutantHints []string `json:"mutant_hints,omitempty"`
+
+	// RequiredTestFeatures lists structural features the user's test must
+	// exhibit, on top of passing the subject and killing every mutant. Only
+	// valid for test-writing exercises.
+	RequiredTestFeatures []string          `json:"required_test_features,omitempty"`
+	Metadata             map[string]string `json:"metadata,omitempty"`
 }
 
 // EffectiveKind returns the exercise's kind, defaulting to KindImplementation
@@ -128,6 +145,9 @@ func (e Exercise) Validate() error {
 		if strings.TrimSpace(e.Tests) == "" {
 			missing = append(missing, "tests")
 		}
+		if len(e.RequiredTestFeatures) > 0 {
+			return fmt.Errorf("exercise %q has required_test_features but is not a test-writing exercise", e.ID)
+		}
 	case KindTestWriting:
 		if strings.TrimSpace(e.SubjectCode) == "" {
 			missing = append(missing, "subject_code")
@@ -137,6 +157,11 @@ func (e Exercise) Validate() error {
 		}
 		if len(e.MutantHints) != 0 && len(e.MutantHints) != len(e.Mutants) {
 			return fmt.Errorf("exercise %q has %d mutant_hints but %d mutants", e.ID, len(e.MutantHints), len(e.Mutants))
+		}
+		for _, feature := range e.RequiredTestFeatures {
+			if _, ok := knownTestFeatures[feature]; !ok {
+				return fmt.Errorf("exercise %q has unknown required test feature %q", e.ID, feature)
+			}
 		}
 	default:
 		return fmt.Errorf("exercise %q has unknown kind %q", e.ID, e.Kind)
