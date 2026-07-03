@@ -3,6 +3,7 @@ package exercise
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -43,6 +44,78 @@ func TestLoadDir(t *testing.T) {
 	}
 	if got, want := exercises[0].ID, "go-001"; got != want {
 		t.Fatalf("first exercise = %q, want %q", got, want)
+	}
+}
+
+func TestValidateDefaultsKindToImplementation(t *testing.T) {
+	ex := Exercise{
+		ID:          "go-001",
+		Title:       "A",
+		Description: "desc",
+		Language:    "go",
+		Topic:       "topic",
+		Difficulty:  1,
+	}
+	err := ex.Validate()
+	if err == nil {
+		t.Fatal("Validate() succeeded, want error for missing tests")
+	}
+	if !strings.Contains(err.Error(), "tests") {
+		t.Fatalf("Validate() error = %q, want it to mention missing tests", err)
+	}
+}
+
+func TestValidateTestWritingRequiresSubjectAndMutants(t *testing.T) {
+	ex := Exercise{
+		ID:          "go-006",
+		Title:       "A",
+		Description: "desc",
+		Language:    "go",
+		Topic:       "topic",
+		Difficulty:  1,
+		Kind:        KindTestWriting,
+	}
+	err := ex.Validate()
+	if err == nil {
+		t.Fatal("Validate() succeeded, want error for missing subject_code/mutants")
+	}
+	for _, want := range []string{"subject_code", "mutants"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("Validate() error = %q, want it to mention %q", err, want)
+		}
+	}
+}
+
+func TestValidateTestWritingMutantHintsLengthMismatch(t *testing.T) {
+	ex := Exercise{
+		ID:          "go-006",
+		Title:       "A",
+		Description: "desc",
+		Language:    "go",
+		Topic:       "topic",
+		Difficulty:  1,
+		Kind:        KindTestWriting,
+		SubjectCode: "package exercise",
+		Mutants:     []string{"package exercise"},
+		MutantHints: []string{"hint one", "hint two"},
+	}
+	if err := ex.Validate(); err == nil {
+		t.Fatal("Validate() succeeded, want error for mismatched mutant_hints length")
+	}
+}
+
+func TestValidateRejectsUnknownKind(t *testing.T) {
+	ex := Exercise{
+		ID:          "go-001",
+		Title:       "A",
+		Description: "desc",
+		Language:    "go",
+		Topic:       "topic",
+		Difficulty:  1,
+		Kind:        "bogus",
+	}
+	if err := ex.Validate(); err == nil {
+		t.Fatal("Validate() succeeded, want error for unknown kind")
 	}
 }
 

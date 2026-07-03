@@ -55,6 +55,12 @@ func run() error {
 		return a.List(ctx)
 	case "stats":
 		return a.Stats(ctx)
+	case "describe":
+		args := fs.Args()[1:]
+		if len(args) == 0 {
+			return fmt.Errorf("usage: cmm describe <exercise-id>")
+		}
+		return a.Describe(ctx, args[0])
 	case "help", "-h", "--help":
 		return printHelp(os.Stdout, fs.Args()[1:])
 	default:
@@ -87,6 +93,11 @@ List all loaded exercises with their review status, difficulty, and topic.`)
   cmm stats
 
 Print a summary of total exercises, reviewed exercises, and exercises currently due.`)
+	case "describe":
+		fmt.Fprintln(w, `Usage:
+  cmm describe <exercise-id>
+
+Print an exercise's full instructions and review status without opening $EDITOR. Use "cmm list" to find an exercise id.`)
 	case "help":
 		fmt.Fprintln(w, `Usage:
   cmm help [command]
@@ -106,10 +117,11 @@ Usage:
   cmm help [command]
 
 Commands:
-  next    open the next due exercise, run tests, and update progress
-  list    list exercises and review status
-  stats   print progress summary
-  help    show this help
+  next             open the next due exercise, run tests, and update progress
+  list             list exercises and review status
+  stats            print progress summary
+  describe <id>    print an exercise's instructions and review status
+  help             show this help
 
 Flags:
   -exercises string   directory containing exercise JSON files (default "exercises/go")

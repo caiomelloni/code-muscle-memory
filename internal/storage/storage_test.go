@@ -43,6 +43,26 @@ func TestJSONStoreSaveAndLoad(t *testing.T) {
 	}
 }
 
+func TestJSONStoreSaveAndLoadAttempts(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "progress.json")
+	store := NewJSONStore(path)
+	want := ProgressFile{
+		Items:    map[string]scheduler.Progress{},
+		Attempts: map[string]string{"go-001": "package exercise\n\nfunc Hello() string { return \"\" }\n"},
+	}
+
+	if err := store.Save(want); err != nil {
+		t.Fatal(err)
+	}
+	got, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Attempts["go-001"] != want.Attempts["go-001"] {
+		t.Fatalf("Attempts[go-001] = %q, want %q", got.Attempts["go-001"], want.Attempts["go-001"])
+	}
+}
+
 func TestJSONStoreRejectsCorruptFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "progress.json")
 	if err := os.WriteFile(path, []byte("{"), 0o644); err != nil {

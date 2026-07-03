@@ -2,7 +2,7 @@
   {
     "id": "go-001-hello",
     "title": "Return a greeting",
-    "description": "Implement Hello so it returns a friendly greeting for the provided name. If the name is empty, greet World.",
+    "description": "Implement Hello so it returns a friendly greeting for the provided name: Hello(\"Chris\") -> \"Hello, Chris\". If the name is empty, greet World instead: Hello(\"\") -> \"Hello, World\".",
     "objective": "Practice defining a function, using strings, and returning values.",
     "difficulty": 1,
     "language": "go",
@@ -17,7 +17,7 @@
   {
     "id": "go-002-integers",
     "title": "Add two integers",
-    "description": "Implement Add so it returns the sum of two integers.",
+    "description": "Implement Add so it returns the sum of two integers: Add(2, 3) -> 5.",
     "objective": "Practice integer parameters, return types, and simple arithmetic.",
     "difficulty": 1,
     "language": "go",
@@ -32,7 +32,7 @@
   {
     "id": "go-003-iteration",
     "title": "Repeat a string",
-    "description": "Implement Repeat so it returns the provided character repeated count times.",
+    "description": "Implement Repeat so it returns the provided character repeated count times: Repeat(\"a\", 5) -> \"aaaaa\". A count of 0 returns an empty string: Repeat(\"b\", 0) -> \"\".",
     "objective": "Practice for loops and string concatenation.",
     "difficulty": 2,
     "language": "go",
@@ -47,7 +47,7 @@
   {
     "id": "go-004-arrays-slices",
     "title": "Sum a slice",
-    "description": "Implement Sum so it returns the total of every integer in the provided slice.",
+    "description": "Implement Sum so it returns the total of every integer in the provided slice: Sum([1, 2, 3, 4, 5]) -> 15. An empty slice returns 0: Sum([]) -> 0.",
     "objective": "Practice slices, range loops, and accumulation.",
     "difficulty": 2,
     "language": "go",
@@ -62,7 +62,7 @@
   {
     "id": "go-005-structs-methods",
     "title": "Calculate rectangle area",
-    "description": "Define an Area method on Rectangle that returns width multiplied by height.",
+    "description": "Define an Area method on Rectangle that returns width multiplied by height: Rectangle(width: 12, height: 6).Area() -> 72.",
     "objective": "Practice structs and methods.",
     "difficulty": 3,
     "language": "go",
@@ -72,6 +72,74 @@
     "solution": "package exercise\n\ntype Rectangle struct {\n\tWidth  float64\n\tHeight float64\n}\n\nfunc (r Rectangle) Area() float64 {\n\treturn r.Width * r.Height\n}\n",
     "metadata": {
       "source": "Learn Go With Tests - Structs, methods and interfaces"
+    }
+  },
+  {
+    "id": "go-006-basic-test",
+    "title": "Test a doubling function",
+    "description": "A function called Double is already implemented. It returns twice the provided integer: Double(4) -> 8, Double(-3) -> -6. Write a test that verifies this behavior.",
+    "objective": "Practice writing a basic Go test that calls a function, checks its result, and reports failure with t.Errorf or t.Fatalf.",
+    "difficulty": 4,
+    "language": "go",
+    "topic": "testing",
+    "kind": "test_writing",
+    "subject_code": "package exercise\n\nfunc Double(n int) int {\n\treturn n * 2\n}\n",
+    "mutants": [
+      "package exercise\n\nfunc Double(n int) int {\n\treturn n\n}\n",
+      "package exercise\n\nfunc Double(n int) int {\n\treturn 0\n}\n"
+    ],
+    "mutant_hints": [
+      "returns the number unchanged instead of doubling it",
+      "always returns zero instead of doubling the number"
+    ],
+    "metadata": {
+      "source": "Learn Go With Tests - Writing tests"
+    }
+  },
+  {
+    "id": "go-007-table-driven-test",
+    "title": "Test a sign-reporting function",
+    "description": "A function called Sign is already implemented. It reports whether a number is positive, negative, or zero: Sign(5) -> \"positive\", Sign(-5) -> \"negative\", Sign(0) -> \"zero\". Write a test that checks all three cases, including zero.",
+    "objective": "Practice table-driven Go tests that cover multiple cases, including an edge case.",
+    "difficulty": 5,
+    "language": "go",
+    "topic": "testing",
+    "kind": "test_writing",
+    "subject_code": "package exercise\n\nfunc Sign(n int) string {\n\tif n > 0 {\n\t\treturn \"positive\"\n\t}\n\tif n < 0 {\n\t\treturn \"negative\"\n\t}\n\treturn \"zero\"\n}\n",
+    "mutants": [
+      "package exercise\n\nfunc Sign(n int) string {\n\tif n >= 0 {\n\t\treturn \"positive\"\n\t}\n\treturn \"negative\"\n}\n",
+      "package exercise\n\nfunc Sign(n int) string {\n\tif n > 0 {\n\t\treturn \"positive\"\n\t}\n\treturn \"negative\"\n}\n"
+    ],
+    "mutant_hints": [
+      "misreports zero as positive instead of zero",
+      "misreports zero as negative instead of zero"
+    ],
+    "metadata": {
+      "source": "Learn Go With Tests - Writing tests"
+    }
+  },
+  {
+    "id": "go-008-subtests-test",
+    "title": "Test FizzBuzz with named subtests",
+    "description": "A function called FizzBuzz is already implemented. For a number divisible by 3 it returns Fizz: FizzBuzz(3) -> \"Fizz\". For a number divisible by 5 it returns Buzz: FizzBuzz(5) -> \"Buzz\". For a number divisible by both it returns FizzBuzz: FizzBuzz(15) -> \"FizzBuzz\". Otherwise it returns the number itself as text: FizzBuzz(2) -> \"2\". Write a table-driven test with a named subtest for each case using t.Run.",
+    "objective": "Practice organizing table-driven test cases into named subtests with t.Run.",
+    "difficulty": 6,
+    "language": "go",
+    "topic": "testing",
+    "kind": "test_writing",
+    "subject_code": "package exercise\n\nimport \"strconv\"\n\nfunc FizzBuzz(n int) string {\n\tswitch {\n\tcase n%15 == 0:\n\t\treturn \"FizzBuzz\"\n\tcase n%3 == 0:\n\t\treturn \"Fizz\"\n\tcase n%5 == 0:\n\t\treturn \"Buzz\"\n\tdefault:\n\t\treturn strconv.Itoa(n)\n\t}\n}\n",
+    "mutants": [
+      "package exercise\n\nimport \"strconv\"\n\nfunc FizzBuzz(n int) string {\n\tswitch {\n\tcase n%3 == 0:\n\t\treturn \"Fizz\"\n\tcase n%5 == 0:\n\t\treturn \"Buzz\"\n\tdefault:\n\t\treturn strconv.Itoa(n)\n\t}\n}\n",
+      "package exercise\n\nimport \"strconv\"\n\nfunc FizzBuzz(n int) string {\n\tswitch {\n\tcase n%15 == 0:\n\t\treturn \"FizzBuzz\"\n\tcase n%3 == 0:\n\t\treturn \"Fizz\"\n\tcase n%6 == 0:\n\t\treturn \"Buzz\"\n\tdefault:\n\t\treturn strconv.Itoa(n)\n\t}\n}\n",
+      "package exercise\n\nimport \"strconv\"\n\nfunc FizzBuzz(n int) string {\n\tswitch {\n\tcase n%15 == 0:\n\t\treturn \"FizzBuzz\"\n\tcase n%3 == 0:\n\t\treturn \"Fizz\"\n\tcase n%5 == 0:\n\t\treturn \"Buzz\"\n\tdefault:\n\t\treturn \"\"\n\t}\n}\n"
+    ],
+    "mutant_hints": [
+      "returns Fizz instead of FizzBuzz for numbers divisible by both 3 and 5",
+      "does not treat multiples of 5 as Buzz",
+      "returns an empty string instead of the number itself for values not divisible by 3 or 5"
+    ],
+    "metadata": {
+      "source": "Learn Go With Tests - Writing tests"
     }
   }
 ]

@@ -36,7 +36,7 @@ The app opens a temporary solution file in `$EDITOR`:
 // What to do: Implement Hello so it returns a friendly greeting for the provided name. If the name is empty, greet World.
 // Objective: Practice defining a function, using strings, and returning values.
 //
-// Implement: a function called Hello, receives a parameter called name of type string, and returns a string
+// Implement: a function called "Hello", receives a parameter called "name" of type string, and returns a string
 
 package exercise
 ```
@@ -53,15 +53,61 @@ You write the code from memory. Then `cmm` runs hidden Go tests and reports whet
 - Exercise pack stored as version-control-friendly JSON
 - Clear internal package boundaries for future languages and schedulers
 
-## Install
+## Installation
 
-Clone the repo and build the CLI:
+### Prerequisites
+
+- Go 1.22 or newer
+- A terminal editor configured through `$EDITOR`
+
+If `$EDITOR` is not set, `cmm next` falls back to `vi`.
+
+### Compile From Source
+
+Clone the repository:
 
 ```sh
-go build ./cmd/cmm
+git clone <repository-url>
+cd code-muscle-memory
 ```
 
-This creates a local `./cmm` binary.
+Download module dependencies:
+
+```sh
+go mod download
+```
+
+Build the CLI:
+
+```sh
+go build -o ./cmm ./cmd/cmm
+```
+
+This creates a local `./cmm` binary in the project root. You can verify it with:
+
+```sh
+./cmm help
+```
+
+### Install On Your PATH
+
+To install the command into your Go binary directory:
+
+```sh
+go install ./cmd/cmm
+```
+
+Make sure the Go binary directory is on your `PATH`. It is usually:
+
+```text
+$(go env GOPATH)/bin
+```
+
+After that, you can run:
+
+```sh
+cmm help
+```
 
 ## Usage
 
@@ -69,6 +115,7 @@ This creates a local `./cmm` binary.
 ./cmm next
 ./cmm list
 ./cmm stats
+./cmm describe <exercise-id>
 ./cmm help
 ```
 
