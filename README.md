@@ -36,7 +36,7 @@ The app opens a temporary solution file in `$EDITOR`:
 // What to do: Implement Hello so it returns a friendly greeting for the provided name. If the name is empty, greet World.
 // Objective: Practice defining a function, using strings, and returning values.
 //
-// Implement: a function called Hello, receives a parameter called name of type string, and returns a string
+// Implement: a function called "Hello", receives a parameter called "name" of type string, and returns a string
 
 package exercise
 ```

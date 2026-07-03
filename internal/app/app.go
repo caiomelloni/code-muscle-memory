@@ -313,26 +313,26 @@ func typeDescriptions(decl *ast.GenDecl) []string {
 		}
 		structType, ok := typeSpec.Type.(*ast.StructType)
 		if !ok {
-			descriptions = append(descriptions, "a type called "+typeSpec.Name.Name)
+			descriptions = append(descriptions, "a type called "+quoted(typeSpec.Name.Name))
 			continue
 		}
 
 		fields := fieldDescriptions(structType.Fields, "field")
 		if len(fields) == 0 {
-			descriptions = append(descriptions, "a struct type called "+typeSpec.Name.Name)
+			descriptions = append(descriptions, "a struct type called "+quoted(typeSpec.Name.Name))
 			continue
 		}
-		descriptions = append(descriptions, "a struct type called "+typeSpec.Name.Name+" with "+joinEnglish(fields))
+		descriptions = append(descriptions, "a struct type called "+quoted(typeSpec.Name.Name)+" with "+joinEnglish(fields))
 	}
 	return descriptions
 }
 
 func funcDescription(fn *ast.FuncDecl) string {
-	subject := "a function called " + fn.Name.Name
+	subject := "a function called " + quoted(fn.Name.Name)
 	if fn.Recv == nil {
 		return subject + ", " + paramsDescription(fn.Type.Params) + ", and " + resultsDescription(fn.Type.Results)
 	}
-	return "a method called " + fn.Name.Name + " on " + receiverDescription(fn.Recv) + ", " + paramsDescription(fn.Type.Params) + ", and " + resultsDescription(fn.Type.Results)
+	return "a method called " + quoted(fn.Name.Name) + " on " + receiverDescription(fn.Recv) + ", " + paramsDescription(fn.Type.Params) + ", and " + resultsDescription(fn.Type.Results)
 }
 
 func receiverDescription(recv *ast.FieldList) string {
@@ -371,10 +371,14 @@ func fieldDescriptions(fields *ast.FieldList, namedKind string) []string {
 			continue
 		}
 		for _, name := range field.Names {
-			descriptions = append(descriptions, "a "+namedKind+" called "+name.Name+" of type "+fieldType)
+			descriptions = append(descriptions, "a "+namedKind+" called "+quoted(name.Name)+" of type "+fieldType)
 		}
 	}
 	return descriptions
+}
+
+func quoted(name string) string {
+	return "\"" + name + "\""
 }
 
 func typePhrase(expr ast.Expr) string {

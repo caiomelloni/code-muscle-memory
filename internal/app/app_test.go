@@ -55,7 +55,7 @@ func TestWriteStarterPrependsInstructions(t *testing.T) {
 		"// Return a greeting",
 		"// What to do: Implement Hello.",
 		"// Objective: Practice functions.",
-		"// Implement: a function called Hello, receives a parameter called name of type string, and returns a string",
+		"// Implement: a function called \"Hello\", receives a parameter called \"name\" of type string, and returns a string",
 		"package exercise",
 	} {
 		if !strings.Contains(got, want) {
@@ -79,8 +79,8 @@ func TestStarterInstructionsIncludeRequiredTypesAndMethods(t *testing.T) {
 
 	got := starterWithInstructions(ex)
 	for _, want := range []string{
-		"// Implement: a struct type called Rectangle with a field called Width of type float64 and a field called Height of type float64",
-		"// Implement: a method called Area on Rectangle, receives no parameters, and returns a float64",
+		"// Implement: a struct type called \"Rectangle\" with a field called \"Width\" of type float64 and a field called \"Height\" of type float64",
+		"// Implement: a method called \"Area\" on Rectangle, receives no parameters, and returns a float64",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("starter instructions missing %q:\n%s", want, got)
