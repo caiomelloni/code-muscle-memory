@@ -86,11 +86,11 @@
     "subject_code": "package exercise\n\nfunc Double(n int) int {\n\treturn n * 2\n}\n",
     "mutants": [
       "package exercise\n\nfunc Double(n int) int {\n\treturn n\n}\n",
-      "package exercise\n\nfunc Double(n int) int {\n\treturn 0\n}\n"
+      "package exercise\n\nfunc Double(n int) int {\n\treturn n + 1\n}\n"
     ],
     "mutant_hints": [
       "returns the number unchanged instead of doubling it",
-      "always returns zero instead of doubling the number"
+      "returns the number plus one instead of doubling it"
     ],
     "metadata": {
       "source": "Learn Go With Tests - Writing tests"
@@ -107,12 +107,14 @@
     "kind": "test_writing",
     "subject_code": "package exercise\n\nfunc Sign(n int) string {\n\tif n > 0 {\n\t\treturn \"positive\"\n\t}\n\tif n < 0 {\n\t\treturn \"negative\"\n\t}\n\treturn \"zero\"\n}\n",
     "mutants": [
-      "package exercise\n\nfunc Sign(n int) string {\n\tif n >= 0 {\n\t\treturn \"positive\"\n\t}\n\treturn \"negative\"\n}\n",
-      "package exercise\n\nfunc Sign(n int) string {\n\tif n > 0 {\n\t\treturn \"positive\"\n\t}\n\treturn \"negative\"\n}\n"
+      "package exercise\n\nfunc Sign(n int) string {\n\tif n > 0 {\n\t\treturn \"negative\"\n\t}\n\tif n < 0 {\n\t\treturn \"negative\"\n\t}\n\treturn \"zero\"\n}\n",
+      "package exercise\n\nfunc Sign(n int) string {\n\tif n > 0 {\n\t\treturn \"positive\"\n\t}\n\tif n < 0 {\n\t\treturn \"positive\"\n\t}\n\treturn \"zero\"\n}\n",
+      "package exercise\n\nfunc Sign(n int) string {\n\tif n >= 0 {\n\t\treturn \"positive\"\n\t}\n\treturn \"negative\"\n}\n"
     ],
     "mutant_hints": [
-      "misreports zero as positive instead of zero",
-      "misreports zero as negative instead of zero"
+      "misreports positive numbers as negative",
+      "misreports negative numbers as positive",
+      "misreports zero as positive instead of zero"
     ],
     "metadata": {
       "source": "Learn Go With Tests - Writing tests"
