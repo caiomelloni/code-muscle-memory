@@ -8,6 +8,7 @@ import (
 
 	"code-muscle-memory/internal/exercise"
 	"code-muscle-memory/internal/scheduler"
+	"code-muscle-memory/internal/storage"
 )
 
 func TestChooseNextPrefersNewExercises(t *testing.T) {
@@ -16,11 +17,13 @@ func TestChooseNextPrefersNewExercises(t *testing.T) {
 		{ID: "go-002", Difficulty: 2},
 		{ID: "go-001", Difficulty: 1},
 	}
-	items := map[string]scheduler.Progress{
-		"go-001": {ExerciseID: "go-001", DueAt: now.Add(-time.Hour)},
+	progress := storage.ProgressFile{
+		Items: map[string]scheduler.Progress{
+			"go-001": {ExerciseID: "go-001", DueAt: now.Add(-time.Hour)},
+		},
 	}
 
-	got, ok := chooseNext(exercises, items, now)
+	got, ok := chooseNext(exercises, progress, now)
 	if !ok {
 		t.Fatal("chooseNext returned false")
 	}
@@ -94,16 +97,41 @@ func TestChooseNextFallsBackToEarliestFutureDue(t *testing.T) {
 		{ID: "go-001", Difficulty: 1},
 		{ID: "go-002", Difficulty: 2},
 	}
-	items := map[string]scheduler.Progress{
-		"go-001": {ExerciseID: "go-001", DueAt: now.Add(48 * time.Hour)},
-		"go-002": {ExerciseID: "go-002", DueAt: now.Add(24 * time.Hour)},
+	progress := storage.ProgressFile{
+		Items: map[string]scheduler.Progress{
+			"go-001": {ExerciseID: "go-001", DueAt: now.Add(48 * time.Hour)},
+			"go-002": {ExerciseID: "go-002", DueAt: now.Add(24 * time.Hour)},
+		},
 	}
 
-	got, ok := chooseNext(exercises, items, now)
+	got, ok := chooseNext(exercises, progress, now)
 	if !ok {
 		t.Fatal("chooseNext returned false")
 	}
 	if got.ID != "go-002" {
 		t.Fatalf("chosen = %q, want go-002", got.ID)
+	}
+}
+
+func TestChooseNextKeepsCurrentExerciseUntilSolved(t *testing.T) {
+	now := time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC)
+	exercises := []exercise.Exercise{
+		{ID: "go-001", Difficulty: 1},
+		{ID: "go-002", Difficulty: 2},
+	}
+	progress := storage.ProgressFile{
+		CurrentExerciseID: "go-001",
+		Items: map[string]scheduler.Progress{
+			"go-001": {ExerciseID: "go-001", DueAt: now.Add(48 * time.Hour)},
+			"go-002": {ExerciseID: "go-002", DueAt: now},
+		},
+	}
+
+	got, ok := chooseNext(exercises, progress, now)
+	if !ok {
+		t.Fatal("chooseNext returned false")
+	}
+	if got.ID != "go-001" {
+		t.Fatalf("chosen = %q, want go-001", got.ID)
 	}
 }

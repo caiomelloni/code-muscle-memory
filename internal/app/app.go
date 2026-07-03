@@ -66,13 +66,17 @@ func (a App) Next(ctx context.Context) error {
 	}
 
 	now := a.cfg.Now()
-	ex, ok := chooseNext(exercises, progress.Items, now)
+	ex, ok := chooseNext(exercises, progress, now)
 	if !ok {
 		fmt.Fprintln(a.cfg.Stdout, "No exercises available.")
 		return nil
 	}
 	item := progress.Items[ex.ID]
 	item.ExerciseID = ex.ID
+	progress.CurrentExerciseID = ex.ID
+	if err := a.store.Save(progress); err != nil {
+		return err
+	}
 
 	if !item.DueAt.IsZero() && item.DueAt.After(now) {
 		fmt.Fprintf(a.cfg.Stdout, "Next review is not due yet. Earliest: %s\n", item.DueAt.Format(time.RFC1123))
@@ -110,13 +114,14 @@ func (a App) Next(ctx context.Context) error {
 	case executor.CompileError:
 		fmt.Fprintln(a.cfg.Stdout, "\nCOMPILE ERROR")
 		fmt.Fprintln(a.cfg.Stdout, result.Output)
-		rating = scheduler.Again
+		return nil
 	case executor.TestFailure:
 		fmt.Fprintln(a.cfg.Stdout, "\nTEST FAILURE")
 		fmt.Fprintln(a.cfg.Stdout, result.Output)
-		rating = scheduler.Again
+		return nil
 	}
 
+	progress.CurrentExerciseID = ""
 	progress.Items[ex.ID] = a.scheduler.Review(now, item, rating)
 	return a.store.Save(progress)
 }
@@ -199,10 +204,19 @@ func (a App) promptRating() scheduler.Rating {
 	}
 }
 
-func chooseNext(exercises []exercise.Exercise, items map[string]scheduler.Progress, now time.Time) (exercise.Exercise, bool) {
+func chooseNext(exercises []exercise.Exercise, progress storage.ProgressFile, now time.Time) (exercise.Exercise, bool) {
 	if len(exercises) == 0 {
 		return exercise.Exercise{}, false
 	}
+	if progress.CurrentExerciseID != "" {
+		for _, ex := range exercises {
+			if ex.ID == progress.CurrentExerciseID {
+				return ex, true
+			}
+		}
+	}
+
+	items := progress.Items
 	ordered := append([]exercise.Exercise(nil), exercises...)
 	sort.SliceStable(ordered, func(i, j int) bool {
 		left, leftOK := items[ordered[i].ID]
