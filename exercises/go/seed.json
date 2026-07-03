@@ -2,7 +2,7 @@
   {
     "id": "go-001-hello",
     "title": "Return a greeting",
-    "description": "Implement Hello so it returns a friendly greeting for the provided name. If the name is empty, greet World.",
+    "description": "Implement Hello so it returns a friendly greeting for the provided name: Hello(\"Chris\") -> \"Hello, Chris\". If the name is empty, greet World instead: Hello(\"\") -> \"Hello, World\".",
     "objective": "Practice defining a function, using strings, and returning values.",
     "difficulty": 1,
     "language": "go",
@@ -17,7 +17,7 @@
   {
     "id": "go-002-integers",
     "title": "Add two integers",
-    "description": "Implement Add so it returns the sum of two integers.",
+    "description": "Implement Add so it returns the sum of two integers: Add(2, 3) -> 5.",
     "objective": "Practice integer parameters, return types, and simple arithmetic.",
     "difficulty": 1,
     "language": "go",
@@ -32,7 +32,7 @@
   {
     "id": "go-003-iteration",
     "title": "Repeat a string",
-    "description": "Implement Repeat so it returns the provided character repeated count times.",
+    "description": "Implement Repeat so it returns the provided character repeated count times: Repeat(\"a\", 5) -> \"aaaaa\". A count of 0 returns an empty string: Repeat(\"b\", 0) -> \"\".",
     "objective": "Practice for loops and string concatenation.",
     "difficulty": 2,
     "language": "go",
@@ -47,7 +47,7 @@
   {
     "id": "go-004-arrays-slices",
     "title": "Sum a slice",
-    "description": "Implement Sum so it returns the total of every integer in the provided slice.",
+    "description": "Implement Sum so it returns the total of every integer in the provided slice: Sum([1, 2, 3, 4, 5]) -> 15. An empty slice returns 0: Sum([]) -> 0.",
     "objective": "Practice slices, range loops, and accumulation.",
     "difficulty": 2,
     "language": "go",
@@ -62,7 +62,7 @@
   {
     "id": "go-005-structs-methods",
     "title": "Calculate rectangle area",
-    "description": "Define an Area method on Rectangle that returns width multiplied by height.",
+    "description": "Define an Area method on Rectangle that returns width multiplied by height: Rectangle(width: 12, height: 6).Area() -> 72.",
     "objective": "Practice structs and methods.",
     "difficulty": 3,
     "language": "go",

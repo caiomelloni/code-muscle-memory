@@ -15,6 +15,8 @@ Use this guide when adding or revising exercises.
 - Do not provide starter code to the user.
 - Do not show Go syntax for the required solution.
 - Describe the required API in prose.
+- State what the return value contains or represents, not just its type. Include at least one concrete example (input -> output), and cover any edge case the hidden tests check.
+- Write examples using generic `Name(args) -> result` pseudocode, not Go syntax. Use bracket lists (`[1, 2, 3]`) for collections and `field: value` pairs for constructing values (`Rectangle(width: 12, height: 6)`). Do not use Go-specific shapes like `:=`, Go struct literals (`Rectangle{Width: 12}`), or Go type names in the example — the goal is to show the input/output relationship without leaking the exact Go syntax the user is meant to recall.
 
 Good:
 
@@ -39,6 +41,24 @@ Bad:
 ```text
 type Rectangle struct { ... }
 func (r Rectangle) Area() float64
+```
+
+Good (concrete return example):
+
+```text
+Implement Hello so it returns a greeting built from the provided name: Hello("Chris") -> "Hello, Chris". If the name is empty, greet World instead: Hello("") -> "Hello, World".
+```
+
+Bad (return described only by type):
+
+```text
+Implement Hello so it returns a string.
+```
+
+Bad (leaks Go syntax instead of generic pseudocode):
+
+```text
+Implement Hello so that Hello("Chris") returns "Hello, " + name.
 ```
 
 ## Test Rules
