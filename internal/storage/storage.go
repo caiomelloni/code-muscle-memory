@@ -12,10 +12,11 @@ import (
 )
 
 type ProgressFile struct {
-	Version          int                           `json:"version"`
-	UpdatedAt        time.Time                     `json:"updated_at"`
+	Version           int                           `json:"version"`
+	UpdatedAt         time.Time                     `json:"updated_at"`
 	CurrentExerciseID string                        `json:"current_exercise_id,omitempty"`
-	Items            map[string]scheduler.Progress `json:"items"`
+	Items             map[string]scheduler.Progress `json:"items"`
+	Attempts          map[string]string             `json:"attempts,omitempty"`
 }
 
 type Store interface {

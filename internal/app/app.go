@@ -83,13 +83,14 @@ func (a App) Next(ctx context.Context) error {
 		return nil
 	}
 
-	solutionPath, cleanup, err := writeStarter(ex)
+	previousAttempt := progress.Attempts[ex.ID]
+	solutionPath, cleanup, err := writeStarter(ex, previousAttempt)
 	if err != nil {
 		return err
 	}
 	defer cleanup()
 
-	a.printExercise(ex, solutionPath)
+	a.printExercise(ex, solutionPath, previousAttempt != "")
 	if err := openEditor(ctx, solutionPath); err != nil {
 		return err
 	}
@@ -114,15 +115,31 @@ func (a App) Next(ctx context.Context) error {
 	case executor.CompileError:
 		fmt.Fprintln(a.cfg.Stdout, "\nCOMPILE ERROR")
 		fmt.Fprintln(a.cfg.Stdout, result.Output)
-		return nil
+		return a.saveAttempt(progress, ex.ID, string(solution))
 	case executor.TestFailure:
 		fmt.Fprintln(a.cfg.Stdout, "\nTEST FAILURE")
 		fmt.Fprintln(a.cfg.Stdout, result.Output)
-		return nil
+		return a.saveAttempt(progress, ex.ID, string(solution))
+	case executor.MutantEscaped:
+		fmt.Fprintln(a.cfg.Stdout, "\nINCOMPLETE TEST")
+		fmt.Fprintln(a.cfg.Stdout, result.Output)
+		return a.saveAttempt(progress, ex.ID, string(solution))
 	}
 
+	delete(progress.Attempts, ex.ID)
 	progress.CurrentExerciseID = ""
 	progress.Items[ex.ID] = a.scheduler.Review(now, item, rating)
+	return a.store.Save(progress)
+}
+
+// saveAttempt persists the user's unsuccessful submission so it can be
+// restored the next time they retry this exercise, instead of starting over
+// from the blank instructions template.
+func (a App) saveAttempt(progress storage.ProgressFile, exerciseID, solution string) error {
+	if progress.Attempts == nil {
+		progress.Attempts = map[string]string{}
+	}
+	progress.Attempts[exerciseID] = solution
 	return a.store.Save(progress)
 }
 
@@ -135,15 +152,7 @@ func (a App) List(ctx context.Context) error {
 	now := a.cfg.Now()
 	for _, ex := range exercises {
 		item, ok := progress.Items[ex.ID]
-		status := "new"
-		if ok {
-			if item.DueAt.After(now) {
-				status = "due " + item.DueAt.Format("2006-01-02")
-			} else {
-				status = "due now"
-			}
-		}
-		fmt.Fprintf(a.cfg.Stdout, "%-22s %-12s difficulty=%d topic=%s\n", ex.ID, status, ex.Difficulty, ex.Topic)
+		fmt.Fprintf(a.cfg.Stdout, "%-22s %-12s difficulty=%d topic=%s\n", ex.ID, reviewStatus(item, ok, now), ex.Difficulty, ex.Topic)
 	}
 	return nil
 }
@@ -174,6 +183,52 @@ func (a App) Stats(ctx context.Context) error {
 	return nil
 }
 
+// Describe prints an exercise's full instructions and review status without
+// opening it in $EDITOR, so a user can preview what an exercise asks for.
+func (a App) Describe(ctx context.Context, id string) error {
+	_ = ctx
+	exercises, progress, err := a.load()
+	if err != nil {
+		return err
+	}
+	ex, ok := findExercise(exercises, id)
+	if !ok {
+		return fmt.Errorf("exercise %q not found", id)
+	}
+
+	item, hasProgress := progress.Items[ex.ID]
+	fmt.Fprintf(a.cfg.Stdout, "# %s (%s)\n\n%s\n", ex.Title, ex.ID, ex.Description)
+	if strings.TrimSpace(ex.Objective) != "" {
+		fmt.Fprintf(a.cfg.Stdout, "\nObjective: %s\n", ex.Objective)
+	}
+	fmt.Fprintf(a.cfg.Stdout, "Topic: %s | Difficulty: %d | Kind: %s | Status: %s\n", ex.Topic, ex.Difficulty, ex.EffectiveKind(), reviewStatus(item, hasProgress, a.cfg.Now()))
+
+	fmt.Fprintln(a.cfg.Stdout)
+	for _, instruction := range kindInstructions(ex) {
+		fmt.Fprintln(a.cfg.Stdout, instruction)
+	}
+	return nil
+}
+
+func reviewStatus(item scheduler.Progress, hasProgress bool, now time.Time) string {
+	if !hasProgress {
+		return "new"
+	}
+	if item.DueAt.After(now) {
+		return "due " + item.DueAt.Format("2006-01-02")
+	}
+	return "due now"
+}
+
+func findExercise(exercises []exercise.Exercise, id string) (exercise.Exercise, bool) {
+	for _, ex := range exercises {
+		if ex.ID == id {
+			return ex, true
+		}
+	}
+	return exercise.Exercise{}, false
+}
+
 func (a App) load() ([]exercise.Exercise, storage.ProgressFile, error) {
 	exercises, err := exercise.LoadDir(a.cfg.ExerciseDir)
 	if err != nil {
@@ -186,8 +241,11 @@ func (a App) load() ([]exercise.Exercise, storage.ProgressFile, error) {
 	return exercises, progress, nil
 }
 
-func (a App) printExercise(ex exercise.Exercise, solutionPath string) {
+func (a App) printExercise(ex exercise.Exercise, solutionPath string, restoredAttempt bool) {
 	fmt.Fprintf(a.cfg.Stdout, "\n# %s\n\n%s\n\nObjective: %s\nTopic: %s | Difficulty: %d\n\nEditing: %s\n", ex.Title, ex.Description, ex.Objective, ex.Topic, ex.Difficulty, solutionPath)
+	if restoredAttempt {
+		fmt.Fprintln(a.cfg.Stdout, "(restored your previous attempt)")
+	}
 }
 
 func (a App) promptRating() scheduler.Rating {
@@ -244,14 +302,17 @@ func chooseNext(exercises []exercise.Exercise, progress storage.ProgressFile, no
 	return ordered[0], true
 }
 
-func writeStarter(ex exercise.Exercise) (string, func(), error) {
+func writeStarter(ex exercise.Exercise, previousAttempt string) (string, func(), error) {
 	dir, err := os.MkdirTemp("", "cmm-edit-*")
 	if err != nil {
 		return "", nil, err
 	}
 	cleanup := func() { _ = os.RemoveAll(dir) }
 	path := filepath.Join(dir, "solution.go")
-	code := starterWithInstructions(ex)
+	code := previousAttempt
+	if strings.TrimSpace(code) == "" {
+		code = starterWithInstructions(ex)
+	}
 	if strings.TrimSpace(code) == "" {
 		code = "package exercise\n"
 	}
@@ -271,12 +332,35 @@ func starterWithInstructions(ex exercise.Exercise) string {
 	if strings.TrimSpace(ex.Objective) != "" {
 		lines = append(lines, "// Objective: "+ex.Objective)
 	}
-	for _, target := range implementationTargets(ex.StarterCode) {
+
+	for _, instruction := range kindInstructions(ex) {
 		lines = append(lines, "//")
-		lines = appendCommentBlock(lines, "Implement: ", target)
+		lines = appendCommentBlock(lines, "", instruction)
 	}
+
 	lines = append(lines, "", "package exercise", "")
 	return strings.Join(lines, "\n")
+}
+
+// kindInstructions describes the API the user must work against, phrased
+// according to the exercise's kind: what to implement, or what is already
+// given plus what test functions to write.
+func kindInstructions(ex exercise.Exercise) []string {
+	switch ex.EffectiveKind() {
+	case exercise.KindTestWriting:
+		var instructions []string
+		for _, target := range implementationTargets(ex.SubjectCode) {
+			instructions = append(instructions, "Given: "+target)
+		}
+		instructions = append(instructions, "Write: one or more functions whose names start with "+quoted("Test")+", each receiving a parameter called "+quoted("t")+" of type pointer to testing.T and returning nothing")
+		return instructions
+	default:
+		var instructions []string
+		for _, target := range implementationTargets(ex.StarterCode) {
+			instructions = append(instructions, "Implement: "+target)
+		}
+		return instructions
+	}
 }
 
 func implementationTargets(starter string) []string {

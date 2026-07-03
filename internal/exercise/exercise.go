@@ -10,6 +10,11 @@ import (
 	"strings"
 )
 
+const (
+	KindImplementation = "implementation"
+	KindTestWriting    = "test_writing"
+)
+
 type Exercise struct {
 	ID          string            `json:"id"`
 	Title       string            `json:"title"`
@@ -18,10 +23,23 @@ type Exercise struct {
 	Difficulty  int               `json:"difficulty"`
 	Language    string            `json:"language"`
 	Topic       string            `json:"topic"`
+	Kind        string            `json:"kind,omitempty"`
 	StarterCode string            `json:"starter_code"`
 	Tests       string            `json:"tests"`
 	Solution    string            `json:"solution,omitempty"`
+	SubjectCode string            `json:"subject_code,omitempty"`
+	Mutants     []string          `json:"mutants,omitempty"`
+	MutantHints []string          `json:"mutant_hints,omitempty"`
 	Metadata    map[string]string `json:"metadata,omitempty"`
+}
+
+// EffectiveKind returns the exercise's kind, defaulting to KindImplementation
+// for exercises authored before the "kind" field existed.
+func (e Exercise) EffectiveKind() string {
+	if strings.TrimSpace(e.Kind) == "" {
+		return KindImplementation
+	}
+	return e.Kind
 }
 
 func LoadDir(dir string) ([]Exercise, error) {
@@ -101,12 +119,29 @@ func (e Exercise) Validate() error {
 	if strings.TrimSpace(e.Topic) == "" {
 		missing = append(missing, "topic")
 	}
-	if strings.TrimSpace(e.Tests) == "" {
-		missing = append(missing, "tests")
-	}
 	if e.Difficulty <= 0 {
 		missing = append(missing, "difficulty")
 	}
+
+	switch e.EffectiveKind() {
+	case KindImplementation:
+		if strings.TrimSpace(e.Tests) == "" {
+			missing = append(missing, "tests")
+		}
+	case KindTestWriting:
+		if strings.TrimSpace(e.SubjectCode) == "" {
+			missing = append(missing, "subject_code")
+		}
+		if len(e.Mutants) == 0 {
+			missing = append(missing, "mutants")
+		}
+		if len(e.MutantHints) != 0 && len(e.MutantHints) != len(e.Mutants) {
+			return fmt.Errorf("exercise %q has %d mutant_hints but %d mutants", e.ID, len(e.MutantHints), len(e.Mutants))
+		}
+	default:
+		return fmt.Errorf("exercise %q has unknown kind %q", e.ID, e.Kind)
+	}
+
 	if len(missing) > 0 {
 		return fmt.Errorf("exercise %q missing required fields: %s", e.ID, strings.Join(missing, ", "))
 	}

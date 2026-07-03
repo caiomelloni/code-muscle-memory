@@ -115,6 +115,7 @@ cmm help
 ./cmm next
 ./cmm list
 ./cmm stats
+./cmm describe <exercise-id>
 ./cmm help
 ```
 

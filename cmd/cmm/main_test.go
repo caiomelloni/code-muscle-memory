@@ -34,6 +34,20 @@ func TestPrintHelpCommand(t *testing.T) {
 	}
 }
 
+func TestPrintHelpDescribeCommand(t *testing.T) {
+	var out bytes.Buffer
+	if err := printHelp(&out, []string{"describe"}); err != nil {
+		t.Fatal(err)
+	}
+
+	got := out.String()
+	for _, want := range []string{"Usage:", "cmm describe <exercise-id>"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("describe help output missing %q:\n%s", want, got)
+		}
+	}
+}
+
 func TestPrintHelpUnknownTopic(t *testing.T) {
 	var out bytes.Buffer
 	if err := printHelp(&out, []string{"missing"}); err == nil {

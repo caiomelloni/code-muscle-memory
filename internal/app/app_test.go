@@ -32,6 +32,39 @@ func TestChooseNextPrefersNewExercises(t *testing.T) {
 	}
 }
 
+func TestFindExercise(t *testing.T) {
+	exercises := []exercise.Exercise{
+		{ID: "go-001", Title: "A"},
+		{ID: "go-002", Title: "B"},
+	}
+
+	got, ok := findExercise(exercises, "go-002")
+	if !ok {
+		t.Fatal("findExercise returned false for an existing id")
+	}
+	if got.Title != "B" {
+		t.Fatalf("Title = %q, want %q", got.Title, "B")
+	}
+
+	if _, ok := findExercise(exercises, "missing"); ok {
+		t.Fatal("findExercise returned true for a missing id")
+	}
+}
+
+func TestReviewStatus(t *testing.T) {
+	now := time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC)
+
+	if got, want := reviewStatus(scheduler.Progress{}, false, now), "new"; got != want {
+		t.Fatalf("reviewStatus() = %q, want %q", got, want)
+	}
+	if got, want := reviewStatus(scheduler.Progress{DueAt: now.Add(24 * time.Hour)}, true, now), "due 2026-07-02"; got != want {
+		t.Fatalf("reviewStatus() = %q, want %q", got, want)
+	}
+	if got, want := reviewStatus(scheduler.Progress{DueAt: now.Add(-time.Hour)}, true, now), "due now"; got != want {
+		t.Fatalf("reviewStatus() = %q, want %q", got, want)
+	}
+}
+
 func TestWriteStarterPrependsInstructions(t *testing.T) {
 	ex := exercise.Exercise{
 		Title:       "Return a greeting",
@@ -40,7 +73,7 @@ func TestWriteStarterPrependsInstructions(t *testing.T) {
 		StarterCode: "package exercise\n\nfunc Hello(name string) string { return \"\" }\n",
 	}
 
-	path, cleanup, err := writeStarter(ex)
+	path, cleanup, err := writeStarter(ex, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,6 +103,29 @@ func TestWriteStarterPrependsInstructions(t *testing.T) {
 	}
 }
 
+func TestWriteStarterRestoresPreviousAttempt(t *testing.T) {
+	ex := exercise.Exercise{
+		Title:       "Return a greeting",
+		Description: "Implement Hello.",
+		StarterCode: "package exercise\n\nfunc Hello(name string) string { return \"\" }\n",
+	}
+	previousAttempt := "package exercise\n\nfunc Hello(name string) string {\n\treturn \"partial attempt\"\n}\n"
+
+	path, cleanup, err := writeStarter(ex, previousAttempt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := string(data); got != previousAttempt {
+		t.Fatalf("starter file = %q, want previous attempt restored verbatim %q", got, previousAttempt)
+	}
+}
+
 func TestStarterInstructionsIncludeRequiredTypesAndMethods(t *testing.T) {
 	ex := exercise.Exercise{
 		Title:       "Calculate rectangle area",
@@ -88,6 +144,32 @@ func TestStarterInstructionsIncludeRequiredTypesAndMethods(t *testing.T) {
 	}
 	if strings.Contains(got, "func ") || strings.Contains(got, "return 0") {
 		t.Fatalf("starter file should not include method implementation:\n%s", got)
+	}
+}
+
+func TestStarterInstructionsForTestWritingUseGivenPrefix(t *testing.T) {
+	ex := exercise.Exercise{
+		Title:       "Test a doubling function",
+		Description: "Write a test for Double.",
+		Objective:   "Practice writing a basic Go test.",
+		Kind:        exercise.KindTestWriting,
+		SubjectCode: "package exercise\n\nfunc Double(n int) int {\n\treturn n * 2\n}\n",
+	}
+
+	got := starterWithInstructions(ex)
+	for _, want := range []string{
+		"// Given: a function called \"Double\", receives a parameter called \"n\" of type int, and returns an int",
+		"// Write: one or more functions whose names start with \"Test\", each receiving a parameter called \"t\" of type pointer to testing.T and returning nothing",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("starter instructions missing %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "Implement:") {
+		t.Fatalf("starter instructions should not use the Implement: prefix for test-writing exercises:\n%s", got)
+	}
+	if strings.Contains(got, "func Double") || strings.Contains(got, "return n * 2") {
+		t.Fatalf("starter file should not include subject code:\n%s", got)
 	}
 }
 
