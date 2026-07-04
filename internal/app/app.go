@@ -73,14 +73,13 @@ func (a App) Next(ctx context.Context) error {
 	}
 	item := progress.Items[ex.ID]
 	item.ExerciseID = ex.ID
-	progress.CurrentExerciseID = ex.ID
-	if err := a.store.Save(progress); err != nil {
-		return err
-	}
-
 	if !item.DueAt.IsZero() && item.DueAt.After(now) {
 		fmt.Fprintf(a.cfg.Stdout, "Next review is not due yet. Earliest: %s\n", item.DueAt.Format(time.RFC1123))
 		return nil
+	}
+	progress.CurrentExerciseID = ex.ID
+	if err := a.store.Save(progress); err != nil {
+		return err
 	}
 
 	previousAttempt := progress.Attempts[ex.ID]
@@ -111,7 +110,7 @@ func (a App) Next(ctx context.Context) error {
 		if strings.TrimSpace(result.Output) != "" {
 			fmt.Fprintln(a.cfg.Stdout, result.Output)
 		}
-		rating = a.promptRating()
+		rating = a.promptRating(now, item)
 	case executor.CompileError:
 		fmt.Fprintln(a.cfg.Stdout, "\nCOMPILE ERROR")
 		fmt.Fprintln(a.cfg.Stdout, result.Output)
@@ -168,22 +167,24 @@ func (a App) Stats(ctx context.Context) error {
 		return err
 	}
 	now := a.cfg.Now()
-	reviewed := 0
+	newCount := 0
+	learning := 0
 	due := 0
 	for _, ex := range exercises {
 		item, ok := progress.Items[ex.ID]
 		if !ok {
-			due++
+			newCount++
 			continue
 		}
-		if item.ReviewCount > 0 {
-			reviewed++
+		if state := item.CurrentState(); state == scheduler.StateLearning || state == scheduler.StateRelearning {
+			learning++
+			continue
 		}
 		if !item.DueAt.After(now) {
 			due++
 		}
 	}
-	fmt.Fprintf(a.cfg.Stdout, "Exercises: %d\nReviewed: %d\nDue now: %d\n", len(exercises), reviewed, due)
+	fmt.Fprintf(a.cfg.Stdout, "Exercises: %d\nNew: %d\nLearning: %d\nDue now: %d\n", len(exercises), newCount, learning, due)
 	return nil
 }
 
@@ -217,6 +218,12 @@ func (a App) Describe(ctx context.Context, id string) error {
 func reviewStatus(item scheduler.Progress, hasProgress bool, now time.Time) string {
 	if !hasProgress {
 		return "new"
+	}
+	if state := item.CurrentState(); state == scheduler.StateLearning || state == scheduler.StateRelearning {
+		if item.DueAt.After(now) {
+			return string(state) + " (due " + item.DueAt.Format("15:04") + ")"
+		}
+		return string(state) + " (due now)"
 	}
 	if item.DueAt.After(now) {
 		return "due " + item.DueAt.Format("2006-01-02")
@@ -252,18 +259,47 @@ func (a App) printExercise(ex exercise.Exercise, solutionPath string, restoredAt
 	}
 }
 
-func (a App) promptRating() scheduler.Rating {
-	fmt.Fprint(a.cfg.Stdout, "Rate this review [good/easy/hard] (default good): ")
+func (a App) promptRating(now time.Time, item scheduler.Progress) scheduler.Rating {
+	previews := a.scheduler.Preview(now, item)
 	reader := bufio.NewReader(a.cfg.Stdin)
-	text, _ := reader.ReadString('\n')
-	switch strings.ToLower(strings.TrimSpace(text)) {
-	case "easy", "e":
-		return scheduler.Easy
-	case "hard", "h":
-		return scheduler.Hard
-	default:
-		return scheduler.Good
+	for {
+		fmt.Fprintf(a.cfg.Stdout, "Rate this review [a]gain %s / [h]ard %s / [g]ood %s / [e]asy %s: ",
+			formatInterval(previews[scheduler.Again]),
+			formatInterval(previews[scheduler.Hard]),
+			formatInterval(previews[scheduler.Good]),
+			formatInterval(previews[scheduler.Easy]))
+		text, err := reader.ReadString('\n')
+		input := strings.ToLower(strings.TrimSpace(text))
+		switch input {
+		case "good", "g":
+			return scheduler.Good
+		case "again", "a":
+			return scheduler.Again
+		case "easy", "e":
+			return scheduler.Easy
+		case "hard", "h":
+			return scheduler.Hard
+		}
+		if err != nil {
+			// Input ran out (e.g. non-interactive stdin); nobody can answer a
+			// re-prompt, so record the middle-of-the-road rating.
+			return scheduler.Good
+		}
+		if input == "" {
+			fmt.Fprintln(a.cfg.Stdout, "A rating is required. Enter again, hard, good, or easy.")
+			continue
+		}
+		fmt.Fprintf(a.cfg.Stdout, "Unknown rating %q. Enter again, hard, good, or easy.\n", input)
 	}
+}
+
+// formatInterval renders a preview delay the way Anki labels its answer
+// buttons: minutes for intra-day steps, whole days otherwise.
+func formatInterval(d time.Duration) string {
+	if d < 24*time.Hour {
+		return fmt.Sprintf("%dm", int(d.Minutes()))
+	}
+	return fmt.Sprintf("%dd", int(d/(24*time.Hour)))
 }
 
 func chooseNext(exercises []exercise.Exercise, progress storage.ProgressFile, now time.Time) (exercise.Exercise, bool) {
@@ -278,32 +314,56 @@ func chooseNext(exercises []exercise.Exercise, progress storage.ProgressFile, no
 		}
 	}
 
-	items := progress.Items
-	ordered := append([]exercise.Exercise(nil), exercises...)
-	sort.SliceStable(ordered, func(i, j int) bool {
-		left, leftOK := items[ordered[i].ID]
-		right, rightOK := items[ordered[j].ID]
-		if !leftOK && rightOK {
-			return true
-		}
-		if leftOK && !rightOK {
-			return false
-		}
-		if leftOK && rightOK && !left.DueAt.Equal(right.DueAt) {
-			return left.DueAt.Before(right.DueAt)
-		}
-		if ordered[i].Difficulty != ordered[j].Difficulty {
-			return ordered[i].Difficulty < ordered[j].Difficulty
-		}
-		return ordered[i].ID < ordered[j].ID
-	})
-	for _, ex := range ordered {
-		item, ok := items[ex.ID]
-		if !ok || !item.DueAt.After(now) {
-			return ex, true
+	// Anki queue order: due learning/relearning cards, then due reviews,
+	// then new cards.
+	var learning, review, fresh []exercise.Exercise
+	for _, ex := range exercises {
+		item, ok := progress.Items[ex.ID]
+		switch {
+		case !ok:
+			fresh = append(fresh, ex)
+		case item.DueAt.After(now):
+			continue
+		case item.CurrentState() == scheduler.StateReview:
+			review = append(review, ex)
+		default:
+			learning = append(learning, ex)
 		}
 	}
-	return ordered[0], true
+
+	byDue := func(list []exercise.Exercise) func(i, j int) bool {
+		return func(i, j int) bool {
+			left, right := progress.Items[list[i].ID], progress.Items[list[j].ID]
+			if !left.DueAt.Equal(right.DueAt) {
+				return left.DueAt.Before(right.DueAt)
+			}
+			return list[i].ID < list[j].ID
+		}
+	}
+	sort.SliceStable(learning, byDue(learning))
+	sort.SliceStable(review, byDue(review))
+	sort.SliceStable(fresh, func(i, j int) bool {
+		if fresh[i].Difficulty != fresh[j].Difficulty {
+			return fresh[i].Difficulty < fresh[j].Difficulty
+		}
+		return fresh[i].ID < fresh[j].ID
+	})
+
+	for _, group := range [][]exercise.Exercise{learning, review, fresh} {
+		if len(group) > 0 {
+			return group[0], true
+		}
+	}
+
+	// Nothing is due and nothing is new: fall back to the exercise with the
+	// earliest upcoming review so the caller can report when it unlocks.
+	earliest := exercises[0]
+	for _, ex := range exercises[1:] {
+		if progress.Items[ex.ID].DueAt.Before(progress.Items[earliest.ID].DueAt) {
+			earliest = ex
+		}
+	}
+	return earliest, true
 }
 
 func writeStarter(ex exercise.Exercise, previousAttempt string) (string, func(), error) {

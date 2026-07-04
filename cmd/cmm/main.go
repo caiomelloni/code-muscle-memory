@@ -81,6 +81,10 @@ func printHelp(w io.Writer, args []string) error {
 
 Open the next due exercise in $EDITOR, run the hidden Go tests, and update spaced repetition progress.
 
+Exercises are served Anki-style: due learning cards first, then due reviews, then new exercises.
+After a passing run you rate the review as again, hard, good, or easy; the rating decides when
+the exercise comes back. Failed runs are saved so you can retry, and never affect scheduling.
+
 Environment:
   EDITOR   editor command used to edit the temporary solution file; defaults to vi`)
 	case "list":
@@ -92,7 +96,7 @@ List all loaded exercises with their review status, difficulty, and topic.`)
 		fmt.Fprintln(w, `Usage:
   cmm stats
 
-Print a summary of total exercises, reviewed exercises, and exercises currently due.`)
+Print a summary of exercises by review state: new, in learning, and due now.`)
 	case "describe":
 		fmt.Fprintln(w, `Usage:
   cmm describe <exercise-id>
