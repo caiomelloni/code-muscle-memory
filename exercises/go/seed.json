@@ -116,7 +116,9 @@
       "misreports negative numbers as positive",
       "misreports zero as positive instead of zero"
     ],
-    "required_test_features": ["table"],
+    "required_test_features": [
+      "table"
+    ],
     "metadata": {
       "source": "Learn Go With Tests - Writing tests"
     }
@@ -134,14 +136,17 @@
     "mutants": [
       "package exercise\n\nimport \"strconv\"\n\nfunc FizzBuzz(n int) string {\n\tswitch {\n\tcase n%3 == 0:\n\t\treturn \"Fizz\"\n\tcase n%5 == 0:\n\t\treturn \"Buzz\"\n\tdefault:\n\t\treturn strconv.Itoa(n)\n\t}\n}\n",
       "package exercise\n\nimport \"strconv\"\n\nfunc FizzBuzz(n int) string {\n\tswitch {\n\tcase n%15 == 0:\n\t\treturn \"FizzBuzz\"\n\tcase n%3 == 0:\n\t\treturn \"Fizz\"\n\tcase n%6 == 0:\n\t\treturn \"Buzz\"\n\tdefault:\n\t\treturn strconv.Itoa(n)\n\t}\n}\n",
-      "package exercise\n\nimport \"strconv\"\n\nfunc FizzBuzz(n int) string {\n\tswitch {\n\tcase n%15 == 0:\n\t\treturn \"FizzBuzz\"\n\tcase n%3 == 0:\n\t\treturn \"Fizz\"\n\tcase n%5 == 0:\n\t\treturn \"Buzz\"\n\tdefault:\n\t\treturn \"\"\n\t}\n}\n"
+      "package exercise\n\nfunc FizzBuzz(n int) string {\n\tswitch {\n\tcase n%15 == 0:\n\t\treturn \"FizzBuzz\"\n\tcase n%3 == 0:\n\t\treturn \"Fizz\"\n\tcase n%5 == 0:\n\t\treturn \"Buzz\"\n\tdefault:\n\t\treturn \"\"\n\t}\n}\n"
     ],
     "mutant_hints": [
       "returns Fizz instead of FizzBuzz for numbers divisible by both 3 and 5",
       "does not treat multiples of 5 as Buzz",
       "returns an empty string instead of the number itself for values not divisible by 3 or 5"
     ],
-    "required_test_features": ["table", "subtests"],
+    "required_test_features": [
+      "table",
+      "subtests"
+    ],
     "metadata": {
       "source": "Learn Go With Tests - Writing tests"
     }

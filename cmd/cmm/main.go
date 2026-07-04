@@ -67,6 +67,8 @@ func run() error {
 			return fmt.Errorf("usage: cmm try <exercise-id>")
 		}
 		return a.Try(ctx, args[0])
+	case "validate":
+		return a.Validate(ctx)
 	case "help", "-h", "--help":
 		return printHelp(os.Stdout, fs.Args()[1:])
 	default:
@@ -118,6 +120,14 @@ review progress. Nothing is saved: no scheduling, no rating prompt, no attempt r
 
 Environment:
   EDITOR   editor command used to edit the temporary solution file; defaults to vi`)
+	case "validate":
+		fmt.Fprintln(w, `Usage:
+  cmm validate
+
+Run authoring checks on every exercise, beyond the schema validation all commands perform:
+each implementation exercise's solution must pass its hidden tests and its starter code must
+not, and each test-writing exercise's subject and mutants must compile. Use it after adding
+or revising exercises.`)
 	case "help":
 		fmt.Fprintln(w, `Usage:
   cmm help [command]
@@ -142,6 +152,7 @@ Commands:
   stats            print progress summary
   describe <id>    print an exercise's instructions and review status
   try <id>         practice an exercise without affecting review progress
+  validate         run authoring checks on every exercise
   help             show this help
 
 Flags:

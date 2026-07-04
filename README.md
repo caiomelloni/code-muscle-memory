@@ -117,10 +117,13 @@ cmm help
 ./cmm stats
 ./cmm describe <exercise-id>
 ./cmm try <exercise-id>
+./cmm validate
 ./cmm help
 ```
 
 `try` opens a specific exercise for practice without affecting spaced repetition progress: nothing is scheduled, rated, or saved. Useful for previewing an exercise or re-drilling one outside the review queue.
+
+`validate` runs authoring checks on every exercise: each implementation exercise's solution must pass its hidden tests and its starter code must not, and each test-writing exercise's subject and mutants must compile. Run it after adding or revising exercises.
 
 By default, progress is saved to:
 

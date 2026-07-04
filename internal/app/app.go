@@ -240,6 +240,40 @@ func (a App) Describe(ctx context.Context, id string) error {
 	return nil
 }
 
+// Validate loads every exercise and runs the deep authoring checks that
+// schema validation cannot: solutions must pass their hidden tests, starter
+// code must not, and test-writing subjects and mutants must compile. It is
+// meant for authors adding or revising exercises, not for regular practice.
+func (a App) Validate(ctx context.Context) error {
+	exercises, err := exercise.LoadDir(a.cfg.ExerciseDir)
+	if err != nil {
+		return err
+	}
+
+	failures := 0
+	for _, ex := range exercises {
+		problems, err := a.executor.VerifyAuthoring(ctx, ex)
+		if err != nil {
+			return err
+		}
+		if len(problems) == 0 {
+			fmt.Fprintf(a.cfg.Stdout, "ok   %s\n", ex.ID)
+			continue
+		}
+		failures++
+		fmt.Fprintf(a.cfg.Stdout, "FAIL %s\n", ex.ID)
+		for _, problem := range problems {
+			fmt.Fprintf(a.cfg.Stdout, "  - %s\n", strings.ReplaceAll(problem, "\n", "\n    "))
+		}
+	}
+
+	if failures > 0 {
+		return fmt.Errorf("%d of %d exercises failed validation", failures, len(exercises))
+	}
+	fmt.Fprintf(a.cfg.Stdout, "All %d exercises passed validation.\n", len(exercises))
+	return nil
+}
+
 func reviewStatus(item scheduler.Progress, hasProgress bool, now time.Time) string {
 	if !hasProgress {
 		return "new"
