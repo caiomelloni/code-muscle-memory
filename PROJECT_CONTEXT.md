@@ -18,6 +18,7 @@
 - Exercise files are JSON under `exercises/go`.
 - User progress is stored as local JSON behind a storage interface.
 - Scheduling is isolated behind an interface so the algorithm can be replaced later.
+- Practice runs via `cmm try` never touch stored progress; scheduling is only updated by rated reviews in `cmm next`.
 
 ## Assistant Guidance
 

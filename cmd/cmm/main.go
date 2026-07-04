@@ -61,6 +61,12 @@ func run() error {
 			return fmt.Errorf("usage: cmm describe <exercise-id>")
 		}
 		return a.Describe(ctx, args[0])
+	case "try":
+		args := fs.Args()[1:]
+		if len(args) == 0 {
+			return fmt.Errorf("usage: cmm try <exercise-id>")
+		}
+		return a.Try(ctx, args[0])
 	case "help", "-h", "--help":
 		return printHelp(os.Stdout, fs.Args()[1:])
 	default:
@@ -102,6 +108,16 @@ Print a summary of exercises by review state: new, in learning, and due now.`)
   cmm describe <exercise-id>
 
 Print an exercise's full instructions and review status without opening $EDITOR. Use "cmm list" to find an exercise id.`)
+	case "try":
+		fmt.Fprintln(w, `Usage:
+  cmm try <exercise-id>
+
+Practice a specific exercise: open it in $EDITOR and run the hidden Go tests, without affecting
+review progress. Nothing is saved: no scheduling, no rating prompt, no attempt restore. Use
+"cmm list" to find an exercise id.
+
+Environment:
+  EDITOR   editor command used to edit the temporary solution file; defaults to vi`)
 	case "help":
 		fmt.Fprintln(w, `Usage:
   cmm help [command]
@@ -125,6 +141,7 @@ Commands:
   list             list exercises and review status
   stats            print progress summary
   describe <id>    print an exercise's instructions and review status
+  try <id>         practice an exercise without affecting review progress
   help             show this help
 
 Flags:

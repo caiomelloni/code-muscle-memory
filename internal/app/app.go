@@ -82,57 +82,82 @@ func (a App) Next(ctx context.Context) error {
 		return err
 	}
 
-	previousAttempt := progress.Attempts[ex.ID]
-	solutionPath, cleanup, err := writeStarter(ex, previousAttempt)
+	result, solution, err := a.runExercise(ctx, ex, progress.Attempts[ex.ID])
 	if err != nil {
 		return err
+	}
+	if result.Status != executor.Success {
+		return a.saveAttempt(progress, ex.ID, solution)
+	}
+
+	rating := a.promptRating(now, item)
+	delete(progress.Attempts, ex.ID)
+	progress.CurrentExerciseID = ""
+	progress.Items[ex.ID] = a.scheduler.Review(now, item, rating)
+	return a.store.Save(progress)
+}
+
+// Try runs a single exercise as practice: it opens the editor and evaluates
+// the solution like a review would, but never reads or writes stored
+// progress, so the review schedule is unaffected.
+func (a App) Try(ctx context.Context, id string) error {
+	exercises, err := exercise.LoadDir(a.cfg.ExerciseDir)
+	if err != nil {
+		return err
+	}
+	ex, ok := findExercise(exercises, id)
+	if !ok {
+		return fmt.Errorf("exercise %q not found", id)
+	}
+
+	fmt.Fprintln(a.cfg.Stdout, "Practice run: results will not affect your review progress.")
+	_, _, err = a.runExercise(ctx, ex, "")
+	return err
+}
+
+// runExercise opens the exercise in the editor, evaluates the solution, and
+// prints the outcome. It never touches stored progress.
+func (a App) runExercise(ctx context.Context, ex exercise.Exercise, previousAttempt string) (executor.Result, string, error) {
+	solutionPath, cleanup, err := writeStarter(ex, previousAttempt)
+	if err != nil {
+		return executor.Result{}, "", err
 	}
 	defer cleanup()
 
 	a.printExercise(ex, solutionPath, previousAttempt != "")
 	if err := openEditor(ctx, solutionPath); err != nil {
-		return err
+		return executor.Result{}, "", err
 	}
 
 	solution, err := os.ReadFile(solutionPath)
 	if err != nil {
-		return err
+		return executor.Result{}, "", err
 	}
 	result, err := a.executor.Evaluate(ctx, ex, string(solution))
 	if err != nil {
-		return err
+		return executor.Result{}, "", err
 	}
 
-	rating := scheduler.Good
 	switch result.Status {
 	case executor.Success:
 		fmt.Fprintln(a.cfg.Stdout, "\nPASS")
 		if strings.TrimSpace(result.Output) != "" {
 			fmt.Fprintln(a.cfg.Stdout, result.Output)
 		}
-		rating = a.promptRating(now, item)
 	case executor.CompileError:
 		fmt.Fprintln(a.cfg.Stdout, "\nCOMPILE ERROR")
 		fmt.Fprintln(a.cfg.Stdout, result.Output)
-		return a.saveAttempt(progress, ex.ID, string(solution))
 	case executor.TestFailure:
 		fmt.Fprintln(a.cfg.Stdout, "\nTEST FAILURE")
 		fmt.Fprintln(a.cfg.Stdout, result.Output)
-		return a.saveAttempt(progress, ex.ID, string(solution))
 	case executor.MutantEscaped:
 		fmt.Fprintln(a.cfg.Stdout, "\nINCOMPLETE TEST")
 		fmt.Fprintln(a.cfg.Stdout, result.Output)
-		return a.saveAttempt(progress, ex.ID, string(solution))
 	case executor.MissingFeature:
 		fmt.Fprintln(a.cfg.Stdout, "\nMISSING STRUCTURE")
 		fmt.Fprintln(a.cfg.Stdout, result.Output)
-		return a.saveAttempt(progress, ex.ID, string(solution))
 	}
-
-	delete(progress.Attempts, ex.ID)
-	progress.CurrentExerciseID = ""
-	progress.Items[ex.ID] = a.scheduler.Review(now, item, rating)
-	return a.store.Save(progress)
+	return result, string(solution), nil
 }
 
 // saveAttempt persists the user's unsuccessful submission so it can be
