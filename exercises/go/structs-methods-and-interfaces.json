@@ -1,0 +1,74 @@
+[
+  {
+    "id": "go-009-float-formatting",
+    "title": "Format a number with two decimals",
+    "description": "Implement a function called FormatArea that receives a number and returns it as text with exactly two decimal places: FormatArea(72) -> \"72.00\", FormatArea(3.14159) -> \"3.14\". Values are rounded rather than truncated: FormatArea(1.239) -> \"1.24\".",
+    "objective": "Practice formatting a floating point number as text with a fixed number of decimal places.",
+    "difficulty": 2,
+    "language": "go",
+    "topic": "formatting",
+    "starter_code": "package exercise\n\nfunc FormatArea(area float64) string {\n\treturn \"\"\n}\n",
+    "tests": "package exercise\n\nimport \"testing\"\n\nfunc TestFormatArea(t *testing.T) {\n\tcases := []struct {\n\t\tin   float64\n\t\twant string\n\t}{\n\t\t{in: 72, want: \"72.00\"},\n\t\t{in: 3.14159, want: \"3.14\"},\n\t\t{in: 1.239, want: \"1.24\"},\n\t}\n\n\tfor _, c := range cases {\n\t\tgot := FormatArea(c.in)\n\t\tif got != c.want {\n\t\t\tt.Errorf(\"FormatArea(%v) = %q, want %q\", c.in, got, c.want)\n\t\t}\n\t}\n}\n",
+    "solution": "package exercise\n\nimport \"fmt\"\n\nfunc FormatArea(area float64) string {\n\treturn fmt.Sprintf(\"%.2f\", area)\n}\n",
+    "metadata": {
+      "source": "Learn Go With Tests - Structs, methods and interfaces (https://quii.gitbook.io/learn-go-with-tests/go-fundamentals/structs-methods-and-interfaces)"
+    }
+  },
+  {
+    "id": "go-010-shape-interface",
+    "title": "Declare a Shape interface",
+    "description": "Declare an interface type called Shape that describes any value having a method called Area which receives nothing and returns a number. Then implement a function called TotalArea that receives a list of Shapes and returns the sum of their areas: TotalArea([shape of area 12, shape of area 4]) -> 16. An empty list totals zero: TotalArea([]) -> 0.",
+    "objective": "Practice declaring an interface and writing a function that works with any value satisfying it.",
+    "difficulty": 4,
+    "language": "go",
+    "topic": "interfaces",
+    "starter_code": "package exercise\n\ntype Shape interface {\n\tArea() float64\n}\n\nfunc TotalArea(shapes []Shape) float64 {\n\treturn 0\n}\n",
+    "tests": "package exercise\n\nimport \"testing\"\n\ntype stubShape struct {\n\tarea float64\n}\n\nfunc (s stubShape) Area() float64 {\n\treturn s.area\n}\n\nfunc TestTotalArea(t *testing.T) {\n\tshapes := []Shape{stubShape{area: 12}, stubShape{area: 4}}\n\n\tgot := TotalArea(shapes)\n\twant := 16.0\n\tif got != want {\n\t\tt.Errorf(\"TotalArea(shapes of area 12 and 4) = %v, want %v\", got, want)\n\t}\n}\n\nfunc TestTotalAreaOfSingleShape(t *testing.T) {\n\tgot := TotalArea([]Shape{stubShape{area: 7.5}})\n\twant := 7.5\n\tif got != want {\n\t\tt.Errorf(\"TotalArea(shape of area 7.5) = %v, want %v\", got, want)\n\t}\n}\n\nfunc TestTotalAreaOfEmptyList(t *testing.T) {\n\tgot := TotalArea(nil)\n\twant := 0.0\n\tif got != want {\n\t\tt.Errorf(\"TotalArea(no shapes) = %v, want %v\", got, want)\n\t}\n}\n",
+    "solution": "package exercise\n\ntype Shape interface {\n\tArea() float64\n}\n\nfunc TotalArea(shapes []Shape) float64 {\n\ttotal := 0.0\n\tfor _, shape := range shapes {\n\t\ttotal += shape.Area()\n\t}\n\treturn total\n}\n",
+    "metadata": {
+      "source": "Learn Go With Tests - Structs, methods and interfaces (https://quii.gitbook.io/learn-go-with-tests/go-fundamentals/structs-methods-and-interfaces)"
+    }
+  },
+  {
+    "id": "go-011-circle-satisfies-shape",
+    "title": "Make a Circle satisfy Shape",
+    "description": "Implement a struct type called Circle with a radius field, and a method called Area returning the circle's area, which is pi times the radius squared: Circle(radius: 10).Area() -> 314.16 (to two decimals). Take pi from the standard library's maths package instead of writing the digits yourself. The hidden test also stores a Circle in a variable whose type only requires an Area method, so Circle must satisfy that requirement without you declaring anything extra.",
+    "objective": "Practice satisfying an interface implicitly by defining the method it requires, and using a standard library constant.",
+    "difficulty": 4,
+    "language": "go",
+    "topic": "interfaces",
+    "starter_code": "package exercise\n\ntype Circle struct {\n\tRadius float64\n}\n\nfunc (c Circle) Area() float64 {\n\treturn 0\n}\n",
+    "tests": "package exercise\n\nimport (\n\t\"math\"\n\t\"testing\"\n)\n\ntype areaHaver interface {\n\tArea() float64\n}\n\nfunc TestCircleArea(t *testing.T) {\n\tgot := Circle{Radius: 10}.Area()\n\twant := math.Pi * 100\n\tif math.Abs(got-want) > 1e-9 {\n\t\tt.Errorf(\"Circle{Radius: 10}.Area() = %v, want %v\", got, want)\n\t}\n}\n\nfunc TestCircleIsUsableWhereverAnAreaIsRequired(t *testing.T) {\n\tvar value areaHaver = Circle{Radius: 2}\n\n\tgot := value.Area()\n\twant := math.Pi * 4\n\tif math.Abs(got-want) > 1e-9 {\n\t\tt.Errorf(\"Circle{Radius: 2}.Area() = %v, want %v\", got, want)\n\t}\n}\n",
+    "solution": "package exercise\n\nimport \"math\"\n\ntype Circle struct {\n\tRadius float64\n}\n\nfunc (c Circle) Area() float64 {\n\treturn math.Pi * c.Radius * c.Radius\n}\n",
+    "metadata": {
+      "source": "Learn Go With Tests - Structs, methods and interfaces (https://quii.gitbook.io/learn-go-with-tests/go-fundamentals/structs-methods-and-interfaces)"
+    }
+  },
+  {
+    "id": "go-012-interface-table-test",
+    "title": "Test area across shape types",
+    "description": "Three shape types are already implemented, along with an interface called Shape that any value with an Area method satisfies. A rectangle's area is width times height: Rectangle(width: 12, height: 6).Area() -> 72. A circle's area is pi times the radius squared: Circle(radius: 10).Area() -> 314.16 (to two decimals). A triangle's area is half of base times height: Triangle(base: 12, height: 6).Area() -> 36. Write one table-driven test whose cases hold Shape values, covering all three kinds of shape.",
+    "objective": "Practice a table-driven test whose cases hold interface values, so one loop covers several concrete types.",
+    "difficulty": 7,
+    "language": "go",
+    "topic": "testing",
+    "kind": "test_writing",
+    "subject_code": "package exercise\n\nimport \"math\"\n\ntype Shape interface {\n\tArea() float64\n}\n\ntype Rectangle struct {\n\tWidth  float64\n\tHeight float64\n}\n\nfunc (r Rectangle) Area() float64 {\n\treturn r.Width * r.Height\n}\n\ntype Circle struct {\n\tRadius float64\n}\n\nfunc (c Circle) Area() float64 {\n\treturn math.Pi * c.Radius * c.Radius\n}\n\ntype Triangle struct {\n\tBase   float64\n\tHeight float64\n}\n\nfunc (t Triangle) Area() float64 {\n\treturn (t.Base * t.Height) / 2\n}\n",
+    "mutants": [
+      "package exercise\n\nimport \"math\"\n\ntype Shape interface {\n\tArea() float64\n}\n\ntype Rectangle struct {\n\tWidth  float64\n\tHeight float64\n}\n\nfunc (r Rectangle) Area() float64 {\n\treturn (r.Width * r.Height) / 2\n}\n\ntype Circle struct {\n\tRadius float64\n}\n\nfunc (c Circle) Area() float64 {\n\treturn math.Pi * c.Radius * c.Radius\n}\n\ntype Triangle struct {\n\tBase   float64\n\tHeight float64\n}\n\nfunc (t Triangle) Area() float64 {\n\treturn (t.Base * t.Height) / 2\n}\n",
+      "package exercise\n\ntype Shape interface {\n\tArea() float64\n}\n\ntype Rectangle struct {\n\tWidth  float64\n\tHeight float64\n}\n\nfunc (r Rectangle) Area() float64 {\n\treturn r.Width * r.Height\n}\n\ntype Circle struct {\n\tRadius float64\n}\n\nfunc (c Circle) Area() float64 {\n\treturn c.Radius * c.Radius\n}\n\ntype Triangle struct {\n\tBase   float64\n\tHeight float64\n}\n\nfunc (t Triangle) Area() float64 {\n\treturn (t.Base * t.Height) / 2\n}\n",
+      "package exercise\n\nimport \"math\"\n\ntype Shape interface {\n\tArea() float64\n}\n\ntype Rectangle struct {\n\tWidth  float64\n\tHeight float64\n}\n\nfunc (r Rectangle) Area() float64 {\n\treturn r.Width * r.Height\n}\n\ntype Circle struct {\n\tRadius float64\n}\n\nfunc (c Circle) Area() float64 {\n\treturn math.Pi * c.Radius * c.Radius\n}\n\ntype Triangle struct {\n\tBase   float64\n\tHeight float64\n}\n\nfunc (t Triangle) Area() float64 {\n\treturn t.Base * t.Height\n}\n"
+    ],
+    "mutant_hints": [
+      "treats a rectangle as if it were a triangle, reporting half of its real area",
+      "leaves the constant pi out of the circle's area",
+      "forgets to halve base times height for a triangle"
+    ],
+    "required_test_features": [
+      "table"
+    ],
+    "metadata": {
+      "source": "Learn Go With Tests - Structs, methods and interfaces (https://quii.gitbook.io/learn-go-with-tests/go-fundamentals/structs-methods-and-interfaces)"
+    }
+  }
+]
