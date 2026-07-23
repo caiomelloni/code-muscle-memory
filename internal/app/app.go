@@ -210,7 +210,87 @@ func (a App) Stats(ctx context.Context) error {
 		}
 	}
 	fmt.Fprintf(a.cfg.Stdout, "Exercises: %d\nNew: %d\nLearning: %d\nDue now: %d\n", len(exercises), newCount, learning, due)
+	fmt.Fprintln(a.cfg.Stdout, nextUpLine(exercises, progress, now))
 	return nil
+}
+
+// nextUpLine names the exercise "cmm next" would serve, so the summary can
+// never disagree with the queue. Its status is included because the exercise
+// is not necessarily available yet: when nothing is due, chooseNext falls back
+// to the earliest upcoming review.
+func nextUpLine(exercises []exercise.Exercise, progress storage.ProgressFile, now time.Time) string {
+	ex, ok := chooseNext(exercises, progress, now)
+	if !ok {
+		return "Next up: none"
+	}
+	item, hasProgress := progress.Items[ex.ID]
+	return fmt.Sprintf("Next up: %s (%s)", ex.ID, reviewStatus(item, hasProgress, now))
+}
+
+// Delete removes an exercise from the deck: its definition is dropped from the
+// JSON file that holds it, and any trace of it in stored progress goes too, so
+// a deleted exercise cannot linger as an orphaned review item or saved attempt.
+func (a App) Delete(ctx context.Context, id string) error {
+	_ = ctx
+	exercises, progress, err := a.load()
+	if err != nil {
+		return err
+	}
+	ex, ok := findExercise(exercises, id)
+	if !ok {
+		return fmt.Errorf("exercise %q not found", id)
+	}
+
+	if !a.confirm(fmt.Sprintf("Delete %s (%s)? This cannot be undone [y/N]: ", ex.ID, ex.Title)) {
+		fmt.Fprintln(a.cfg.Stdout, "Nothing was deleted.")
+		return nil
+	}
+
+	result, err := exercise.Remove(a.cfg.ExerciseDir, ex.ID)
+	if err != nil {
+		return err
+	}
+
+	var cleared []string
+	if _, ok := progress.Items[ex.ID]; ok {
+		delete(progress.Items, ex.ID)
+		cleared = append(cleared, "review history")
+	}
+	if _, ok := progress.Attempts[ex.ID]; ok {
+		delete(progress.Attempts, ex.ID)
+		cleared = append(cleared, "saved attempt")
+	}
+	if progress.CurrentExerciseID == ex.ID {
+		progress.CurrentExerciseID = ""
+		cleared = append(cleared, "in-progress marker")
+	}
+	if len(cleared) > 0 {
+		if err := a.store.Save(progress); err != nil {
+			return err
+		}
+	}
+
+	if result.FileDeleted {
+		fmt.Fprintf(a.cfg.Stdout, "Deleted %s and removed the now-empty %s.\n", ex.ID, result.Path)
+	} else {
+		fmt.Fprintf(a.cfg.Stdout, "Deleted %s from %s.\n", ex.ID, result.Path)
+	}
+	if len(cleared) > 0 {
+		fmt.Fprintf(a.cfg.Stdout, "Cleared its %s from progress.\n", strings.Join(cleared, ", "))
+	}
+	return nil
+}
+
+// confirm asks a yes/no question, defaulting to no. Input running out counts
+// as no: nobody is there to approve a destructive action.
+func (a App) confirm(prompt string) bool {
+	fmt.Fprint(a.cfg.Stdout, prompt)
+	text, _ := bufio.NewReader(a.cfg.Stdin).ReadString('\n')
+	switch strings.ToLower(strings.TrimSpace(text)) {
+	case "y", "yes":
+		return true
+	}
+	return false
 }
 
 // Describe prints an exercise's full instructions and review status without

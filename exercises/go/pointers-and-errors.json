@@ -1,0 +1,75 @@
+[
+  {
+    "id": "go-013-named-type-stringer",
+    "title": "Named type with custom formatting",
+    "description": "Declare a named type called Bitcoin built on the whole number type, so an amount of currency cannot be mixed up with a plain count. Give Bitcoin a method called String that describes it as text in the form \"10 BTC\"; that is the method the standard library's formatting package looks for when it renders a value as text, so describing a Bitcoin has to go through it: Bitcoin(10) described as text -\u003e \"10 BTC\", Bitcoin(0) -\u003e \"0 BTC\". Also implement a function called Amount that receives a whole number and returns the matching Bitcoin value: Amount(25) -\u003e a Bitcoin worth 25, which describes itself as \"25 BTC\".",
+    "objective": "Practice declaring a named type over an existing one and giving it a custom text representation.",
+    "difficulty": 3,
+    "language": "go",
+    "topic": "types",
+    "starter_code": "package exercise\n\ntype Bitcoin int\n\nfunc (b Bitcoin) String() string {\n\treturn \"\"\n}\n\nfunc Amount(n int) Bitcoin {\n\treturn 0\n}\n",
+    "tests": "package exercise\n\nimport (\n\t\"fmt\"\n\t\"testing\"\n)\n\nfunc TestBitcoinDescribesItself(t *testing.T) {\n\tgot := fmt.Sprintf(\"%s\", Bitcoin(10))\n\twant := \"10 BTC\"\n\tif got != want {\n\t\tt.Errorf(\"Bitcoin(10) formatted as text = %q, want %q\", got, want)\n\t}\n}\n\nfunc TestZeroBitcoinDescribesItself(t *testing.T) {\n\tgot := fmt.Sprintf(\"%s\", Bitcoin(0))\n\twant := \"0 BTC\"\n\tif got != want {\n\t\tt.Errorf(\"Bitcoin(0) formatted as text = %q, want %q\", got, want)\n\t}\n}\n\nfunc TestAmountBuildsABitcoin(t *testing.T) {\n\tgot := Amount(25)\n\tif got != Bitcoin(25) {\n\t\tt.Fatalf(\"Amount(25) = %d, want a Bitcoin worth 25\", int(got))\n\t}\n\n\tdescribed := fmt.Sprintf(\"%s\", got)\n\twant := \"25 BTC\"\n\tif described != want {\n\t\tt.Errorf(\"Amount(25) formatted as text = %q, want %q\", described, want)\n\t}\n}\n",
+    "solution": "package exercise\n\nimport \"fmt\"\n\ntype Bitcoin int\n\nfunc (b Bitcoin) String() string {\n\treturn fmt.Sprintf(\"%d BTC\", int(b))\n}\n\nfunc Amount(n int) Bitcoin {\n\treturn Bitcoin(n)\n}\n",
+    "metadata": {
+      "source": "Learn Go With Tests - Pointers \u0026 errors (https://quii.gitbook.io/learn-go-with-tests/go-fundamentals/pointers-and-errors)"
+    }
+  },
+  {
+    "id": "go-014-pointer-receiver",
+    "title": "Method that mutates its receiver",
+    "description": "Implement a struct type called Wallet that keeps a balance of whole coins. Give it a method called Deposit, which receives an amount and adds it to the wallet's balance, and a method called Balance, which returns the amount the wallet currently holds. A deposit has to change the wallet it was called on rather than a throwaway copy of it, so deposits build up: on a new wallet, Deposit(10) then Balance() -\u003e 10, then Deposit(5) then Balance() -\u003e 15. A wallet that has never been deposited into holds nothing: Balance() -\u003e 0.",
+    "objective": "Practice writing a method that modifies the value it was called on instead of a copy of it.",
+    "difficulty": 3,
+    "language": "go",
+    "topic": "pointers",
+    "starter_code": "package exercise\n\ntype Wallet struct {\n\tbalance int\n}\n\nfunc (w Wallet) Deposit(amount int) {\n\tw.balance += amount\n}\n\nfunc (w Wallet) Balance() int {\n\treturn w.balance\n}\n",
+    "tests": "package exercise\n\nimport \"testing\"\n\nfunc TestNewWalletIsEmpty(t *testing.T) {\n\twallet := Wallet{}\n\n\tif got := wallet.Balance(); got != 0 {\n\t\tt.Errorf(\"Balance() on a new wallet = %d, want 0\", got)\n\t}\n}\n\nfunc TestDepositChangesTheWallet(t *testing.T) {\n\twallet := Wallet{}\n\twallet.Deposit(10)\n\n\tif got := wallet.Balance(); got != 10 {\n\t\tt.Errorf(\"Balance() after depositing 10 = %d, want 10\", got)\n\t}\n}\n\nfunc TestDepositsAccumulate(t *testing.T) {\n\twallet := Wallet{}\n\twallet.Deposit(10)\n\twallet.Deposit(5)\n\n\tif got := wallet.Balance(); got != 15 {\n\t\tt.Errorf(\"Balance() after depositing 10 then 5 = %d, want 15\", got)\n\t}\n}\n",
+    "solution": "package exercise\n\ntype Wallet struct {\n\tbalance int\n}\n\nfunc (w *Wallet) Deposit(amount int) {\n\tw.balance += amount\n}\n\nfunc (w *Wallet) Balance() int {\n\treturn w.balance\n}\n",
+    "metadata": {
+      "source": "Learn Go With Tests - Pointers \u0026 errors (https://quii.gitbook.io/learn-go-with-tests/go-fundamentals/pointers-and-errors)"
+    }
+  },
+  {
+    "id": "go-015-return-error",
+    "title": "Signalling failure with an error",
+    "description": "A wallet keeps a balance of whole coins. Implement a struct type called Wallet with a method called Deposit, which adds an amount to the balance, a method called Balance, which returns the amount held, and a method called Withdraw, which receives an amount and takes it out of the wallet. Withdraw reports back to its caller whether it worked: when the wallet holds enough it takes the amount out and reports nothing wrong, and taking out the entire balance is allowed. When the wallet holds less than the requested amount it leaves the balance untouched and reports a failure whose message reads exactly \"cannot withdraw, insufficient funds\". From a wallet holding 20: Withdraw(10) -\u003e no failure, then Balance() -\u003e 10. From a wallet holding 20: Withdraw(20) -\u003e no failure, then Balance() -\u003e 0. From a wallet holding 20: Withdraw(100) -\u003e a failure reading \"cannot withdraw, insufficient funds\", then Balance() -\u003e 20.",
+    "objective": "Practice reporting failure from a method by returning a failure value, and reporting nothing when it succeeds.",
+    "difficulty": 4,
+    "language": "go",
+    "topic": "errors",
+    "starter_code": "package exercise\n\nimport \"errors\"\n\ntype Wallet struct {\n\tbalance int\n}\n\nfunc (w *Wallet) Deposit(amount int) {\n\tw.balance += amount\n}\n\nfunc (w *Wallet) Balance() int {\n\treturn w.balance\n}\n\nfunc (w *Wallet) Withdraw(amount int) error {\n\treturn errors.New(\"not implemented\")\n}\n",
+    "tests": "package exercise\n\nimport \"testing\"\n\nfunc TestWithdrawWhenTheWalletCanCoverIt(t *testing.T) {\n\twallet := Wallet{}\n\twallet.Deposit(20)\n\n\terr := wallet.Withdraw(10)\n\tif err != nil {\n\t\tt.Fatalf(\"Withdraw(10) from a wallet holding 20 reported %q, want no failure\", err.Error())\n\t}\n\tif got := wallet.Balance(); got != 10 {\n\t\tt.Errorf(\"Balance() after withdrawing 10 from 20 = %d, want 10\", got)\n\t}\n}\n\nfunc TestWithdrawTheWholeBalance(t *testing.T) {\n\twallet := Wallet{}\n\twallet.Deposit(20)\n\n\terr := wallet.Withdraw(20)\n\tif err != nil {\n\t\tt.Fatalf(\"Withdraw(20) from a wallet holding 20 reported %q, want no failure\", err.Error())\n\t}\n\tif got := wallet.Balance(); got != 0 {\n\t\tt.Errorf(\"Balance() after withdrawing the whole balance = %d, want 0\", got)\n\t}\n}\n\nfunc TestWithdrawMoreThanTheWalletHolds(t *testing.T) {\n\twallet := Wallet{}\n\twallet.Deposit(20)\n\n\terr := wallet.Withdraw(100)\n\tif err == nil {\n\t\tt.Fatal(\"Withdraw(100) from a wallet holding 20 reported no failure, want a failure\")\n\t}\n\tif got, want := err.Error(), \"cannot withdraw, insufficient funds\"; got != want {\n\t\tt.Errorf(\"failure message = %q, want %q\", got, want)\n\t}\n\tif got := wallet.Balance(); got != 20 {\n\t\tt.Errorf(\"Balance() after a rejected withdrawal = %d, want 20 (unchanged)\", got)\n\t}\n}\n",
+    "solution": "package exercise\n\nimport \"errors\"\n\ntype Wallet struct {\n\tbalance int\n}\n\nfunc (w *Wallet) Deposit(amount int) {\n\tw.balance += amount\n}\n\nfunc (w *Wallet) Balance() int {\n\treturn w.balance\n}\n\nfunc (w *Wallet) Withdraw(amount int) error {\n\tif amount \u003e w.balance {\n\t\treturn errors.New(\"cannot withdraw, insufficient funds\")\n\t}\n\tw.balance -= amount\n\treturn nil\n}\n",
+    "metadata": {
+      "source": "Learn Go With Tests - Pointers \u0026 errors (https://quii.gitbook.io/learn-go-with-tests/go-fundamentals/pointers-and-errors)"
+    }
+  },
+  {
+    "id": "go-017-error-test",
+    "title": "Testing both error paths",
+    "description": "A wallet is already implemented. It holds a balance of whole coins, and depositing adds to that balance. Withdrawing takes an amount out: when the wallet holds at least that much it removes it and reports nothing wrong, and withdrawing the entire balance is allowed. When the wallet holds less than the requested amount it leaves the balance completely untouched and reports the failure value the package exposes under the name ErrInsufficientFunds, whose message reads \"cannot withdraw, insufficient funds\". Write tests covering three withdrawals: one the wallet can cover, one that takes the entire balance, and one the wallet cannot cover. Check the resulting balance in every case, and for the rejected withdrawal check that the reported failure is the exposed value itself rather than a value that merely carries the same message.",
+    "objective": "Practice testing both outcomes of an operation that can fail: asserting nothing went wrong on the successful paths, and asserting the exact failure value and unchanged state on the failing one.",
+    "difficulty": 6,
+    "language": "go",
+    "topic": "testing",
+    "kind": "test_writing",
+    "subject_code": "package exercise\n\nimport \"errors\"\n\nvar ErrInsufficientFunds = errors.New(\"cannot withdraw, insufficient funds\")\n\ntype Wallet struct {\n\tbalance int\n}\n\nfunc (w *Wallet) Deposit(amount int) {\n\tw.balance += amount\n}\n\nfunc (w *Wallet) Balance() int {\n\treturn w.balance\n}\n\nfunc (w *Wallet) Withdraw(amount int) error {\n\tif amount \u003e w.balance {\n\t\treturn ErrInsufficientFunds\n\t}\n\tw.balance -= amount\n\treturn nil\n}\n",
+    "mutants": [
+      "package exercise\n\nimport \"errors\"\n\nvar ErrInsufficientFunds = errors.New(\"cannot withdraw, insufficient funds\")\n\ntype Wallet struct {\n\tbalance int\n}\n\nfunc (w *Wallet) Deposit(amount int) {\n\tw.balance += amount\n}\n\nfunc (w *Wallet) Balance() int {\n\treturn w.balance\n}\n\nfunc (w *Wallet) Withdraw(amount int) error {\n\tif amount \u003e w.balance {\n\t\treturn nil\n\t}\n\tw.balance -= amount\n\treturn nil\n}\n",
+      "package exercise\n\nimport \"errors\"\n\nvar ErrInsufficientFunds = errors.New(\"cannot withdraw, insufficient funds\")\n\ntype Wallet struct {\n\tbalance int\n}\n\nfunc (w *Wallet) Deposit(amount int) {\n\tw.balance += amount\n}\n\nfunc (w *Wallet) Balance() int {\n\treturn w.balance\n}\n\nfunc (w *Wallet) Withdraw(amount int) error {\n\tif amount \u003e w.balance {\n\t\tw.balance -= amount\n\t\treturn ErrInsufficientFunds\n\t}\n\tw.balance -= amount\n\treturn nil\n}\n",
+      "package exercise\n\nimport \"errors\"\n\nvar ErrInsufficientFunds = errors.New(\"cannot withdraw, insufficient funds\")\n\ntype Wallet struct {\n\tbalance int\n}\n\nfunc (w *Wallet) Deposit(amount int) {\n\tw.balance += amount\n}\n\nfunc (w *Wallet) Balance() int {\n\treturn w.balance\n}\n\nfunc (w *Wallet) Withdraw(amount int) error {\n\tif amount \u003e= w.balance {\n\t\treturn ErrInsufficientFunds\n\t}\n\tw.balance -= amount\n\treturn nil\n}\n",
+      "package exercise\n\nimport \"errors\"\n\nvar ErrInsufficientFunds = errors.New(\"cannot withdraw, insufficient funds\")\n\ntype Wallet struct {\n\tbalance int\n}\n\nfunc (w *Wallet) Deposit(amount int) {\n\tw.balance += amount\n}\n\nfunc (w *Wallet) Balance() int {\n\treturn w.balance\n}\n\nfunc (w *Wallet) Withdraw(amount int) error {\n\tif amount \u003e w.balance {\n\t\treturn errors.New(\"cannot withdraw, insufficient funds\")\n\t}\n\tw.balance -= amount\n\treturn nil\n}\n",
+      "package exercise\n\nimport \"errors\"\n\nvar ErrInsufficientFunds = errors.New(\"cannot withdraw, insufficient funds\")\n\ntype Wallet struct {\n\tbalance int\n}\n\nfunc (w *Wallet) Deposit(amount int) {\n\tw.balance += amount\n}\n\nfunc (w *Wallet) Balance() int {\n\treturn w.balance\n}\n\nfunc (w *Wallet) Withdraw(amount int) error {\n\tif amount \u003e w.balance {\n\t\treturn ErrInsufficientFunds\n\t}\n\tw.balance += amount\n\treturn nil\n}\n"
+    ],
+    "mutant_hints": [
+      "lets a withdrawal the wallet cannot cover report success instead of reporting a failure",
+      "takes the money out anyway when it rejects the withdrawal, leaving the balance wrong",
+      "rejects a withdrawal of the wallet's entire balance, which it should allow",
+      "builds a brand new failure value on every rejection instead of reporting the one the package exposes",
+      "adds the amount to the balance on a successful withdrawal instead of taking it away"
+    ],
+    "metadata": {
+      "source": "Learn Go With Tests - Pointers \u0026 errors (https://quii.gitbook.io/learn-go-with-tests/go-fundamentals/pointers-and-errors)"
+    }
+  }
+]

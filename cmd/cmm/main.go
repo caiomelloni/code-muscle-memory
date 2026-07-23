@@ -67,6 +67,12 @@ func run() error {
 			return fmt.Errorf("usage: cmm try <exercise-id>")
 		}
 		return a.Try(ctx, args[0])
+	case "delete":
+		args := fs.Args()[1:]
+		if len(args) == 0 {
+			return fmt.Errorf("usage: cmm delete <exercise-id>")
+		}
+		return a.Delete(ctx, args[0])
 	case "validate":
 		return a.Validate(ctx)
 	case "help", "-h", "--help":
@@ -104,7 +110,8 @@ List all loaded exercises with their review status, difficulty, and topic.`)
 		fmt.Fprintln(w, `Usage:
   cmm stats
 
-Print a summary of exercises by review state: new, in learning, and due now.`)
+Print a summary of exercises by review state: new, in learning, and due now, followed by the
+id of the exercise "cmm next" would serve and its review status.`)
 	case "describe":
 		fmt.Fprintln(w, `Usage:
   cmm describe <exercise-id>
@@ -120,6 +127,16 @@ review progress. Nothing is saved: no scheduling, no rating prompt, no attempt r
 
 Environment:
   EDITOR   editor command used to edit the temporary solution file; defaults to vi`)
+	case "delete":
+		fmt.Fprintln(w, `Usage:
+  cmm delete <exercise-id>
+
+Remove an exercise from the deck. Its definition is dropped from the JSON file that holds it,
+and that file is deleted if the exercise was the last one in it. Any review history, saved
+attempt, and in-progress marker for the exercise are cleared from the progress file too.
+
+You are asked to confirm first; the deletion cannot be undone. Use "cmm list" to find an
+exercise id.`)
 	case "validate":
 		fmt.Fprintln(w, `Usage:
   cmm validate
@@ -152,6 +169,7 @@ Commands:
   stats            print progress summary
   describe <id>    print an exercise's instructions and review status
   try <id>         practice an exercise without affecting review progress
+  delete <id>      remove an exercise from the deck and from stored progress
   validate         run authoring checks on every exercise
   help             show this help
 

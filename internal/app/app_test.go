@@ -1,7 +1,9 @@
 package app
 
 import (
+	"context"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -67,6 +69,204 @@ func TestChooseNextOrdersNewExercisesByDifficulty(t *testing.T) {
 	}
 	if got.ID != "go-001" {
 		t.Fatalf("chosen = %q, want the easiest new exercise go-001", got.ID)
+	}
+}
+
+func TestNextUpLine(t *testing.T) {
+	now := time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC)
+	exercises := []exercise.Exercise{
+		{ID: "go-001", Difficulty: 1},
+		{ID: "go-002", Difficulty: 2},
+	}
+
+	t.Run("names the due review over the new exercise", func(t *testing.T) {
+		progress := storage.ProgressFile{Items: map[string]scheduler.Progress{
+			"go-002": {ExerciseID: "go-002", State: scheduler.StateReview, IntervalDays: 3, DueAt: now.Add(-time.Hour)},
+		}}
+
+		if got, want := nextUpLine(exercises, progress, now), "Next up: go-002 (due now)"; got != want {
+			t.Fatalf("nextUpLine() = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("names the easiest new exercise when nothing has been reviewed", func(t *testing.T) {
+		progress := storage.ProgressFile{Items: map[string]scheduler.Progress{}}
+
+		if got, want := nextUpLine(exercises, progress, now), "Next up: go-001 (new)"; got != want {
+			t.Fatalf("nextUpLine() = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("names the earliest upcoming review when nothing is due", func(t *testing.T) {
+		progress := storage.ProgressFile{Items: map[string]scheduler.Progress{
+			"go-001": {ExerciseID: "go-001", State: scheduler.StateReview, IntervalDays: 9, DueAt: now.Add(9 * 24 * time.Hour)},
+			"go-002": {ExerciseID: "go-002", State: scheduler.StateReview, IntervalDays: 3, DueAt: now.Add(3 * 24 * time.Hour)},
+		}}
+
+		if got, want := nextUpLine(exercises, progress, now), "Next up: go-002 (due 2026-07-04)"; got != want {
+			t.Fatalf("nextUpLine() = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("names the exercise already in progress", func(t *testing.T) {
+		progress := storage.ProgressFile{
+			CurrentExerciseID: "go-002",
+			Items:             map[string]scheduler.Progress{},
+		}
+
+		if got, want := nextUpLine(exercises, progress, now), "Next up: go-002 (new)"; got != want {
+			t.Fatalf("nextUpLine() = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("reports none when there are no exercises", func(t *testing.T) {
+		if got, want := nextUpLine(nil, storage.ProgressFile{}, now), "Next up: none"; got != want {
+			t.Fatalf("nextUpLine() = %q, want %q", got, want)
+		}
+	})
+}
+
+const deleteTestDeck = `[
+  {
+    "id": "go-001",
+    "title": "First",
+    "description": "d",
+    "objective": "o",
+    "difficulty": 1,
+    "language": "go",
+    "topic": "t",
+    "starter_code": "package exercise\n",
+    "tests": "package exercise\n"
+  },
+  {
+    "id": "go-002",
+    "title": "Second",
+    "description": "d",
+    "objective": "o",
+    "difficulty": 2,
+    "language": "go",
+    "topic": "t",
+    "starter_code": "package exercise\n",
+    "tests": "package exercise\n"
+  }
+]
+`
+
+// newDeleteTestApp builds an app over a throwaway deck and progress file, with
+// go-002 carrying every kind of stored state a delete has to clean up.
+func newDeleteTestApp(t *testing.T, answer string, out *strings.Builder) (App, string, string) {
+	t.Helper()
+	dir := t.TempDir()
+	exerciseDir := filepath.Join(dir, "exercises")
+	if err := os.MkdirAll(exerciseDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(exerciseDir, "deck.json"), []byte(deleteTestDeck), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	progressPath := filepath.Join(dir, "progress.json")
+	store := storage.NewJSONStore(progressPath)
+	if err := store.Save(storage.ProgressFile{
+		CurrentExerciseID: "go-002",
+		Items: map[string]scheduler.Progress{
+			"go-002": {ExerciseID: "go-002", State: scheduler.StateReview, IntervalDays: 3},
+		},
+		Attempts: map[string]string{"go-002": "package exercise\n"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	a := New(Config{
+		ExerciseDir:  exerciseDir,
+		ProgressPath: progressPath,
+		Stdout:       out,
+		Stdin:        strings.NewReader(answer),
+	})
+	return a, exerciseDir, progressPath
+}
+
+func TestDeleteRemovesTheExerciseAndItsProgress(t *testing.T) {
+	var out strings.Builder
+	a, exerciseDir, progressPath := newDeleteTestApp(t, "y\n", &out)
+
+	if err := a.Delete(context.Background(), "go-002"); err != nil {
+		t.Fatal(err)
+	}
+
+	remaining, err := exercise.LoadDir(exerciseDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(remaining) != 1 || remaining[0].ID != "go-001" {
+		t.Fatalf("remaining exercises = %d, want just go-001", len(remaining))
+	}
+
+	progress, err := storage.NewJSONStore(progressPath).Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := progress.Items["go-002"]; ok {
+		t.Error("review history for the deleted exercise is still stored")
+	}
+	if _, ok := progress.Attempts["go-002"]; ok {
+		t.Error("saved attempt for the deleted exercise is still stored")
+	}
+	if progress.CurrentExerciseID != "" {
+		t.Errorf("CurrentExerciseID = %q, want it cleared", progress.CurrentExerciseID)
+	}
+}
+
+func TestDeleteDoesNothingWhenNotConfirmed(t *testing.T) {
+	var out strings.Builder
+	a, exerciseDir, progressPath := newDeleteTestApp(t, "n\n", &out)
+
+	if err := a.Delete(context.Background(), "go-002"); err != nil {
+		t.Fatal(err)
+	}
+
+	remaining, err := exercise.LoadDir(exerciseDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(remaining) != 2 {
+		t.Fatalf("remaining exercises = %d, want both kept", len(remaining))
+	}
+	progress, err := storage.NewJSONStore(progressPath).Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := progress.Items["go-002"]; !ok {
+		t.Error("review history was cleared despite the delete being declined")
+	}
+	if !strings.Contains(out.String(), "Nothing was deleted") {
+		t.Errorf("output does not say nothing happened:\n%s", out.String())
+	}
+}
+
+func TestDeleteWithNoAnswerAvailableIsDeclined(t *testing.T) {
+	var out strings.Builder
+	a, exerciseDir, _ := newDeleteTestApp(t, "", &out)
+
+	if err := a.Delete(context.Background(), "go-002"); err != nil {
+		t.Fatal(err)
+	}
+
+	remaining, err := exercise.LoadDir(exerciseDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(remaining) != 2 {
+		t.Fatalf("remaining exercises = %d, want both kept when nobody can confirm", len(remaining))
+	}
+}
+
+func TestDeleteReportsAnUnknownID(t *testing.T) {
+	var out strings.Builder
+	a, _, _ := newDeleteTestApp(t, "y\n", &out)
+
+	if err := a.Delete(context.Background(), "go-999"); err == nil {
+		t.Fatal("Delete() returned no error for an unknown id")
 	}
 }
 
