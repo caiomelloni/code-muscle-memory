@@ -73,6 +73,13 @@ func run() error {
 			return fmt.Errorf("usage: cmm delete <exercise-id>")
 		}
 		return a.Delete(ctx, args[0])
+	case "reset":
+		args := fs.Args()[1:]
+		id := ""
+		if len(args) > 0 {
+			id = args[0]
+		}
+		return a.Reset(ctx, id)
 	case "validate":
 		return a.Validate(ctx)
 	case "help", "-h", "--help":
@@ -137,6 +144,17 @@ attempt, and in-progress marker for the exercise are cleared from the progress f
 
 You are asked to confirm first; the deletion cannot be undone. Use "cmm list" to find an
 exercise id.`)
+	case "reset":
+		fmt.Fprintln(w, `Usage:
+  cmm reset [exercise-id]
+
+Discard a saved attempt so the exercise reopens from the original instructions instead of your
+last submission. Useful when a previous attempt went down the wrong path and you want a clean
+slate.
+
+With no id it resets the exercise currently in progress (the one "cmm next" is serving); pass
+an id to reset a specific exercise instead. Only the in-progress draft is cleared: review
+history and scheduling are left untouched. Use "cmm list" to find an exercise id.`)
 	case "validate":
 		fmt.Fprintln(w, `Usage:
   cmm validate
@@ -170,6 +188,7 @@ Commands:
   describe <id>    print an exercise's instructions and review status
   try <id>         practice an exercise without affecting review progress
   delete <id>      remove an exercise from the deck and from stored progress
+  reset [id]       discard a saved attempt (defaults to the current exercise)
   validate         run authoring checks on every exercise
   help             show this help
 

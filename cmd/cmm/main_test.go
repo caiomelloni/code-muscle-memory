@@ -62,6 +62,20 @@ func TestPrintHelpTryCommand(t *testing.T) {
 	}
 }
 
+func TestPrintHelpResetCommand(t *testing.T) {
+	var out bytes.Buffer
+	if err := printHelp(&out, []string{"reset"}); err != nil {
+		t.Fatal(err)
+	}
+
+	got := out.String()
+	for _, want := range []string{"Usage:", "cmm reset [exercise-id]", "original instructions"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("reset help output missing %q:\n%s", want, got)
+		}
+	}
+}
+
 func TestPrintHelpUnknownTopic(t *testing.T) {
 	var out bytes.Buffer
 	if err := printHelp(&out, []string{"missing"}); err == nil {

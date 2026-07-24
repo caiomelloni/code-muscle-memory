@@ -270,6 +270,115 @@ func TestDeleteReportsAnUnknownID(t *testing.T) {
 	}
 }
 
+func TestResetClearsTheSavedAttemptButKeepsProgress(t *testing.T) {
+	var out strings.Builder
+	a, _, progressPath := newDeleteTestApp(t, "", &out)
+
+	if err := a.Reset(context.Background(), "go-002"); err != nil {
+		t.Fatal(err)
+	}
+
+	progress, err := storage.NewJSONStore(progressPath).Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := progress.Attempts["go-002"]; ok {
+		t.Error("saved attempt was not cleared")
+	}
+	if _, ok := progress.Items["go-002"]; !ok {
+		t.Error("review history was cleared but should have been kept")
+	}
+	if progress.CurrentExerciseID != "go-002" {
+		t.Errorf("CurrentExerciseID = %q, want it kept as go-002", progress.CurrentExerciseID)
+	}
+	if !strings.Contains(out.String(), "Cleared your saved attempt") {
+		t.Errorf("output does not confirm the reset:\n%s", out.String())
+	}
+}
+
+func TestResetWithNoIDClearsTheCurrentExercise(t *testing.T) {
+	var out strings.Builder
+	a, _, progressPath := newDeleteTestApp(t, "", &out)
+
+	// newDeleteTestApp marks go-002 as the current exercise; an empty id
+	// should target it without the caller naming it.
+	if err := a.Reset(context.Background(), ""); err != nil {
+		t.Fatal(err)
+	}
+
+	progress, err := storage.NewJSONStore(progressPath).Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := progress.Attempts["go-002"]; ok {
+		t.Error("saved attempt for the current exercise was not cleared")
+	}
+	if !strings.Contains(out.String(), "go-002") {
+		t.Errorf("output should name the reset exercise:\n%s", out.String())
+	}
+}
+
+func TestResetWithNoIDAndNothingInProgress(t *testing.T) {
+	var out strings.Builder
+	a, _, progressPath := newDeleteTestApp(t, "", &out)
+
+	store := storage.NewJSONStore(progressPath)
+	progress, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	progress.CurrentExerciseID = ""
+	if err := store.Save(progress); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := a.Reset(context.Background(), ""); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "No exercise is in progress") {
+		t.Errorf("output should explain there is nothing in progress:\n%s", out.String())
+	}
+	// A saved attempt still exists, but with no target it must be left alone.
+	after, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := after.Attempts["go-002"]; !ok {
+		t.Error("a no-op reset should not have touched the stored attempt")
+	}
+}
+
+func TestResetWithNoSavedAttemptReportsNothingToDo(t *testing.T) {
+	var out strings.Builder
+	a, _, progressPath := newDeleteTestApp(t, "", &out)
+
+	// go-001 has no stored attempt.
+	if err := a.Reset(context.Background(), "go-001"); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "nothing to reset") {
+		t.Errorf("output does not say there was nothing to reset:\n%s", out.String())
+	}
+
+	// The unrelated saved attempt for go-002 must be left intact.
+	progress, err := storage.NewJSONStore(progressPath).Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := progress.Attempts["go-002"]; !ok {
+		t.Error("resetting go-001 disturbed the saved attempt for go-002")
+	}
+}
+
+func TestResetReportsAnUnknownID(t *testing.T) {
+	var out strings.Builder
+	a, _, _ := newDeleteTestApp(t, "", &out)
+
+	if err := a.Reset(context.Background(), "go-999"); err == nil {
+		t.Fatal("Reset() returned no error for an unknown id")
+	}
+}
+
 func TestFindExercise(t *testing.T) {
 	exercises := []exercise.Exercise{
 		{ID: "go-001", Title: "A"},

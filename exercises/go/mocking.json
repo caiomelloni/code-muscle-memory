@@ -1,0 +1,65 @@
+[
+  {
+    "id": "go-026-assert-spy-calls",
+    "title": "Assert a dependency was called the right number of times",
+    "description": "A function called Countdown is already implemented. It is given a destination to write to and a sleeper — something that can be told to sleep. It counts down through three numbers, and for each number it writes the number to the destination and then asks the sleeper to sleep once. So a full run asks the sleeper to sleep exactly three times. The sleeper is asked to sleep by calling a method named Sleep that takes no arguments and returns nothing. Write a test that verifies this: build your own stand-in sleeper — a type providing that Sleep method — that records how many times it is asked to sleep, run Countdown with a throwaway destination and your stand-in, then assert the sleeper was asked to sleep exactly three times. Report a helpful failure showing the count you got versus the three you wanted.",
+    "objective": "Practice injecting a spy to verify a dependency is invoked the expected number of times.",
+    "difficulty": 5,
+    "language": "go",
+    "topic": "mocking",
+    "kind": "test_writing",
+    "subject_code": "package exercise\n\nimport (\n\t\"fmt\"\n\t\"io\"\n)\n\ntype Sleeper interface {\n\tSleep()\n}\n\nfunc Countdown(out io.Writer, sleeper Sleeper) {\n\tfor i := 3; i \u003e 0; i-- {\n\t\tfmt.Fprintln(out, i)\n\t\tsleeper.Sleep()\n\t}\n}\n",
+    "mutants": [
+      "package exercise\n\nimport (\n\t\"fmt\"\n\t\"io\"\n)\n\ntype Sleeper interface {\n\tSleep()\n}\n\nfunc Countdown(out io.Writer, sleeper Sleeper) {\n\tfor i := 2; i \u003e 0; i-- {\n\t\tfmt.Fprintln(out, i)\n\t\tsleeper.Sleep()\n\t}\n}\n",
+      "package exercise\n\nimport (\n\t\"fmt\"\n\t\"io\"\n)\n\ntype Sleeper interface {\n\tSleep()\n}\n\nfunc Countdown(out io.Writer, sleeper Sleeper) {\n\tfor i := 3; i \u003e 0; i-- {\n\t\tfmt.Fprintln(out, i)\n\t\tsleeper.Sleep()\n\t}\n\tsleeper.Sleep()\n}\n",
+      "package exercise\n\nimport (\n\t\"fmt\"\n\t\"io\"\n)\n\ntype Sleeper interface {\n\tSleep()\n}\n\nfunc Countdown(out io.Writer, sleeper Sleeper) {\n\tfor i := 3; i \u003e 0; i-- {\n\t\tfmt.Fprintln(out, i)\n\t}\n}\n"
+    ],
+    "mutant_hints": [
+      "asks the sleeper to sleep fewer times than it should",
+      "sleeps one extra time after the countdown finishes",
+      "never asks the sleeper to sleep at all"
+    ],
+    "metadata": {
+      "source": "Learn Go With Tests - Mocking (https://quii.gitbook.io/learn-go-with-tests/go-fundamentals/mocking)"
+    }
+  },
+  {
+    "id": "go-027-spy-call-order",
+    "title": "Verify the order of interleaved operations",
+    "description": "A function called Countdown is already implemented. It is given a destination to write to and a sleeper. It counts down through three numbers, and for each number it first asks the sleeper to sleep and then writes the number to the destination. So the operations happen strictly in this order: sleep, write, sleep, write, sleep, write. Write a test that verifies the operations happen in that exact order — not merely that the right number of sleeps and writes occurred. The sleeper is asked to sleep through a method named Sleep that takes no arguments and returns nothing; the destination is written to through a method named Write that receives the bytes to write and returns the number of bytes written together with an error. Build a single stand-in providing both methods so it can serve as the destination and the sleeper at once, recording a label for each operation (one label when it is written to, a different one when it is asked to sleep) in the order the operations happen. Pass that same stand-in as both the destination and the sleeper, run Countdown, then assert the recorded sequence of labels equals sleep, write, sleep, write, sleep, write, comparing the whole sequence at once. A test that only counts operations would pass a broken version that writes before sleeping, so checking the order is the point.",
+    "objective": "Practice a spy that records the order of interleaved operations across two interfaces, and asserting the exact call sequence rather than just the counts.",
+    "difficulty": 6,
+    "language": "go",
+    "topic": "mocking",
+    "kind": "test_writing",
+    "subject_code": "package exercise\n\nimport (\n\t\"fmt\"\n\t\"io\"\n)\n\ntype Sleeper interface {\n\tSleep()\n}\n\nfunc Countdown(out io.Writer, sleeper Sleeper) {\n\tfor i := 3; i \u003e 0; i-- {\n\t\tsleeper.Sleep()\n\t\tfmt.Fprintln(out, i)\n\t}\n}\n",
+    "mutants": [
+      "package exercise\n\nimport (\n\t\"fmt\"\n\t\"io\"\n)\n\ntype Sleeper interface {\n\tSleep()\n}\n\nfunc Countdown(out io.Writer, sleeper Sleeper) {\n\tfor i := 3; i \u003e 0; i-- {\n\t\tfmt.Fprintln(out, i)\n\t\tsleeper.Sleep()\n\t}\n}\n",
+      "package exercise\n\nimport (\n\t\"fmt\"\n\t\"io\"\n)\n\ntype Sleeper interface {\n\tSleep()\n}\n\nfunc Countdown(out io.Writer, sleeper Sleeper) {\n\tfor i := 2; i \u003e 0; i-- {\n\t\tsleeper.Sleep()\n\t\tfmt.Fprintln(out, i)\n\t}\n}\n",
+      "package exercise\n\nimport (\n\t\"fmt\"\n\t\"io\"\n)\n\ntype Sleeper interface {\n\tSleep()\n}\n\nfunc Countdown(out io.Writer, sleeper Sleeper) {\n\tfor i := 3; i \u003e 0; i-- {\n\t\tsleeper.Sleep()\n\t\tfmt.Fprintln(out, i)\n\t}\n\tfmt.Fprintln(out, \"Go!\")\n}\n"
+    ],
+    "mutant_hints": [
+      "writes each number before sleeping instead of after, reversing the order",
+      "runs one fewer sleep-and-write round",
+      "writes one extra line after the countdown ends"
+    ],
+    "metadata": {
+      "source": "Learn Go With Tests - Mocking (https://quii.gitbook.io/learn-go-with-tests/go-fundamentals/mocking)"
+    }
+  },
+  {
+    "id": "go-028-configurable-sleeper",
+    "title": "Inject a function as a dependency",
+    "description": "Implement a struct type called ConfigurableSleeper that pauses for a configured amount of time, but where the actual pausing is supplied from outside so it can be tested without really waiting. It has a field called duration holding a length of time, and a field called sleep holding a function that accepts a length of time and performs the wait. It has a method called Sleep that takes no arguments and returns nothing; calling Sleep invokes the stored sleep function, passing it the stored duration. For example, if duration is 5 seconds, calling Sleep hands 5 seconds to the stored function exactly once. In production the stored function would be the standard library's real sleep; in a test it can be a stand-in that records the duration it received.",
+    "objective": "Practice injecting a function as a dependency: store a function field and call it, so real work like sleeping can be swapped for a test stand-in.",
+    "difficulty": 6,
+    "language": "go",
+    "topic": "dependency-injection",
+    "starter_code": "package exercise\n\nimport \"time\"\n\ntype ConfigurableSleeper struct {\n\tduration time.Duration\n\tsleep    func(time.Duration)\n}\n\nfunc (c ConfigurableSleeper) Sleep() {\n}\n",
+    "tests": "package exercise\n\nimport (\n\t\"testing\"\n\t\"time\"\n)\n\nfunc TestConfigurableSleeper(t *testing.T) {\n\tvar sleptFor time.Duration\n\tcalls := 0\n\tspy := func(d time.Duration) {\n\t\tcalls++\n\t\tsleptFor = d\n\t}\n\n\tsleeper := ConfigurableSleeper{duration: 5 * time.Second, sleep: spy}\n\tsleeper.Sleep()\n\n\tif calls != 1 {\n\t\tt.Errorf(\"expected sleep function to be called once, got %d\", calls)\n\t}\n\tif sleptFor != 5*time.Second {\n\t\tt.Errorf(\"should have slept for %v but slept for %v\", 5*time.Second, sleptFor)\n\t}\n}\n",
+    "solution": "package exercise\n\nimport \"time\"\n\ntype ConfigurableSleeper struct {\n\tduration time.Duration\n\tsleep    func(time.Duration)\n}\n\nfunc (c ConfigurableSleeper) Sleep() {\n\tc.sleep(c.duration)\n}\n",
+    "metadata": {
+      "source": "Learn Go With Tests - Mocking (https://quii.gitbook.io/learn-go-with-tests/go-fundamentals/mocking)"
+    }
+  }
+]

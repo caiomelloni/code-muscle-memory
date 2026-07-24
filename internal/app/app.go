@@ -281,6 +281,45 @@ func (a App) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
+// Reset discards the saved attempt for an exercise so the next time it is
+// opened it starts from the original instructions template instead of the
+// user's previous submission. Review history and scheduling are left alone,
+// and the in-progress marker is kept so the exercise stays the one "cmm next"
+// serves — the card reopens on its original statement, not a different one.
+//
+// With an empty id it targets the exercise currently in progress, so the common
+// case of resetting the card you are working on needs no argument.
+func (a App) Reset(ctx context.Context, id string) error {
+	_ = ctx
+	exercises, progress, err := a.load()
+	if err != nil {
+		return err
+	}
+	if id == "" {
+		if progress.CurrentExerciseID == "" {
+			fmt.Fprintln(a.cfg.Stdout, "No exercise is in progress; pass an exercise id to reset a specific one.")
+			return nil
+		}
+		id = progress.CurrentExerciseID
+	}
+	ex, ok := findExercise(exercises, id)
+	if !ok {
+		return fmt.Errorf("exercise %q not found", id)
+	}
+
+	if _, ok := progress.Attempts[ex.ID]; !ok {
+		fmt.Fprintf(a.cfg.Stdout, "No saved attempt for %s; nothing to reset.\n", ex.ID)
+		return nil
+	}
+
+	delete(progress.Attempts, ex.ID)
+	if err := a.store.Save(progress); err != nil {
+		return err
+	}
+	fmt.Fprintf(a.cfg.Stdout, "Cleared your saved attempt for %s. It will reopen from the original instructions.\n", ex.ID)
+	return nil
+}
+
 // confirm asks a yes/no question, defaulting to no. Input running out counts
 // as no: nobody is there to approve a destructive action.
 func (a App) confirm(prompt string) bool {

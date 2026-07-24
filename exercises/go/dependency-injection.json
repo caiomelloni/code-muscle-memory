@@ -1,0 +1,41 @@
+[
+  {
+    "id": "go-023-dependency-injection",
+    "title": "Inject an io.Writer dependency",
+    "description": "Implement a function called Greet that receives two things: a destination to write to and a name. It writes the greeting Hello, followed by the name into that destination and returns nothing. Use the general-purpose \"somewhere to write bytes\" type for the destination, so the same function works with an in-memory buffer, a network connection, or the terminal: writing with name \"Chris\" places \"Hello, Chris\" into the destination. Then implement a second function called GreetToStdout that receives only a name and makes the greeting appear on the program's standard output, by handing Greet the real standard-output stream as its destination: GreetToStdout(name: \"Elodie\") prints \"Hello, Elodie\".",
+    "objective": "Practice dependency injection: write to a general writer interface instead of hard-coding the output, then inject the real standard-output stream so the same function drives the terminal.",
+    "difficulty": 5,
+    "language": "go",
+    "topic": "dependency-injection",
+    "starter_code": "package exercise\n\nimport \"io\"\n\nfunc Greet(writer io.Writer, name string) {\n}\n\nfunc GreetToStdout(name string) {\n}\n",
+    "tests": "package exercise\n\nimport (\n\t\"bytes\"\n\t\"io\"\n\t\"os\"\n\t\"testing\"\n)\n\nfunc TestGreet(t *testing.T) {\n\tbuffer := bytes.Buffer{}\n\tGreet(&buffer, \"Chris\")\n\n\tgot := buffer.String()\n\twant := \"Hello, Chris\"\n\tif got != want {\n\t\tt.Errorf(\"Greet wrote %q, want %q\", got, want)\n\t}\n}\n\nfunc TestGreetToStdout(t *testing.T) {\n\told := os.Stdout\n\tr, w, _ := os.Pipe()\n\tos.Stdout = w\n\tdefer func() { os.Stdout = old }()\n\n\tGreetToStdout(\"Elodie\")\n\tw.Close()\n\n\tout, _ := io.ReadAll(r)\n\tgot := string(out)\n\twant := \"Hello, Elodie\"\n\tif got != want {\n\t\tt.Errorf(\"GreetToStdout printed %q, want %q\", got, want)\n\t}\n}\n",
+    "solution": "package exercise\n\nimport (\n\t\"fmt\"\n\t\"io\"\n\t\"os\"\n)\n\nfunc Greet(writer io.Writer, name string) {\n\tfmt.Fprintf(writer, \"Hello, %s\", name)\n}\n\nfunc GreetToStdout(name string) {\n\tGreet(os.Stdout, name)\n}\n",
+    "metadata": {
+      "source": "Learn Go With Tests - Dependency Injection (https://quii.gitbook.io/learn-go-with-tests/go-fundamentals/dependency-injection)"
+    }
+  },
+  {
+    "id": "go-024-buffer-capture-test",
+    "title": "Capture output with bytes.Buffer",
+    "description": "A function called Greet is already implemented. It receives a destination to write to and a name, and writes the greeting Hello, followed by the name into that destination: greeting the name \"Chris\" places \"Hello, Chris\" there. Write a test for it. Create an in-memory buffer, pass it as the destination along with the name \"Chris\", then read back the text that was written and check it equals \"Hello, Chris\". Report a helpful failure that shows what was got versus what was wanted.",
+    "objective": "Practice testing a function that writes to an injected destination by capturing its output in an in-memory buffer and asserting on the written text.",
+    "difficulty": 5,
+    "language": "go",
+    "topic": "testing",
+    "kind": "test_writing",
+    "subject_code": "package exercise\n\nimport (\n\t\"fmt\"\n\t\"io\"\n)\n\nfunc Greet(writer io.Writer, name string) {\n\tfmt.Fprintf(writer, \"Hello, %s\", name)\n}\n",
+    "mutants": [
+      "package exercise\n\nimport (\n\t\"fmt\"\n\t\"io\"\n)\n\nfunc Greet(writer io.Writer, name string) {\n\tfmt.Fprintf(writer, \"Hi, %s\", name)\n}\n",
+      "package exercise\n\nimport (\n\t\"fmt\"\n\t\"io\"\n)\n\nfunc Greet(writer io.Writer, name string) {\n\tfmt.Fprintf(writer, \"Hello, %s!\", name)\n}\n",
+      "package exercise\n\nimport (\n\t\"fmt\"\n\t\"io\"\n)\n\nfunc Greet(writer io.Writer, name string) {\n\tfmt.Fprintf(writer, \"%s, Hello\", name)\n}\n"
+    ],
+    "mutant_hints": [
+      "greets with the wrong word instead of Hello",
+      "adds an extra exclamation mark that should not be there",
+      "puts the name before the greeting instead of after it"
+    ],
+    "metadata": {
+      "source": "Learn Go With Tests - Dependency Injection (https://quii.gitbook.io/learn-go-with-tests/go-fundamentals/dependency-injection)"
+    }
+  }
+]
