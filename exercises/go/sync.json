@@ -1,0 +1,41 @@
+[
+  {
+    "id": "go-032-mutex-counter",
+    "title": "Count safely from many goroutines",
+    "description": "Implement a type called Counter that keeps a running count and can be used from several concurrently running tasks at once. Provide a constructor called NewCounter that hands back a ready-to-use counter, a method called Inc that adds one to the count, and a method called Value that reports the count so far. A fresh counter reports zero, and the count follows the increments made: NewCounter() then Inc(), Inc(), Inc() -> Value() 3. The count is shared state, so two increments happening at the same time must not overwrite each other: a hundred thousand increments running at the same time must still leave Value() -> 100000. Guard the count with a mutual exclusion lock kept in a field of the counter, taking the lock before touching the count and making sure it is always released once the work is done, even though that work is a single line. Reading the count is shared access too, so guard it the same way. Keep the lock a plain named field rather than folding it into the type itself, so callers cannot lock and unlock the counter from outside. Because such a lock must never be copied once it has been used, the constructor hands back a pointer to one counter rather than a counter value, and both methods work through that pointer so every caller shares the same count.",
+    "objective": "Practice guarding shared state with a mutual exclusion lock so concurrent updates cannot overwrite one another.",
+    "difficulty": 7,
+    "language": "go",
+    "topic": "concurrency",
+    "starter_code": "package exercise\n\ntype Counter struct {\n}\n\nfunc NewCounter() *Counter {\n\treturn nil\n}\n\nfunc (c *Counter) Inc() {\n}\n\nfunc (c *Counter) Value() int {\n\treturn 0\n}\n",
+    "tests": "package exercise\n\nimport (\n\t\"sync\"\n\t\"testing\"\n)\n\nfunc TestCounterStartsAtZero(t *testing.T) {\n\tcounter := NewCounter()\n\n\tif got := counter.Value(); got != 0 {\n\t\tt.Errorf(\"got %d, want 0\", got)\n\t}\n}\n\nfunc TestCounterCountsItsIncrements(t *testing.T) {\n\tcounter := NewCounter()\n\n\tcounter.Inc()\n\tcounter.Inc()\n\tcounter.Inc()\n\n\tif got := counter.Value(); got != 3 {\n\t\tt.Errorf(\"got %d, want 3\", got)\n\t}\n}\n\nfunc TestCounterLosesNoIncrementsRunConcurrently(t *testing.T) {\n\tconst workers = 100\n\tconst incrementsPerWorker = 1000\n\n\tcounter := NewCounter()\n\n\tvar wg sync.WaitGroup\n\twg.Add(workers)\n\n\tfor i := 0; i < workers; i++ {\n\t\tgo func() {\n\t\t\tdefer wg.Done()\n\t\t\tfor j := 0; j < incrementsPerWorker; j++ {\n\t\t\t\tcounter.Inc()\n\t\t\t}\n\t\t}()\n\t}\n\n\twg.Wait()\n\n\twant := workers * incrementsPerWorker\n\tif got := counter.Value(); got != want {\n\t\tt.Errorf(\"got %d, want %d: increments were lost when they ran at the same time\", got, want)\n\t}\n}\n",
+    "solution": "package exercise\n\nimport \"sync\"\n\ntype Counter struct {\n\tmu    sync.Mutex\n\tvalue int\n}\n\nfunc NewCounter() *Counter {\n\treturn &Counter{}\n}\n\nfunc (c *Counter) Inc() {\n\tc.mu.Lock()\n\tdefer c.mu.Unlock()\n\tc.value++\n}\n\nfunc (c *Counter) Value() int {\n\tc.mu.Lock()\n\tdefer c.mu.Unlock()\n\treturn c.value\n}\n",
+    "metadata": {
+      "source": "Learn Go With Tests - Sync (https://quii.gitbook.io/learn-go-with-tests/go-fundamentals/sync)"
+    }
+  },
+  {
+    "id": "go-033-concurrent-counter-test",
+    "title": "Test a counter under concurrent load",
+    "description": "A type called Counter is already implemented. NewCounter hands back a fresh counter whose count is zero, Inc adds one to the count, and Value reports the count so far. Increments are safe to make from several concurrently running tasks at once. Write the tests for it. Cover three things. That a fresh counter reports zero. That the count follows the increments made, so three increments one after another leave it reporting three. And that no increment is lost when many of them happen at the same time: start a large number of concurrently running increments against one shared counter, enough that an unguarded count would visibly lose some, and assert the final count is exactly the number of increments made. Every one of those concurrent tasks must increment the same counter rather than a copy of it. Before reading the final count, block until every increment has finished, waiting on the whole group of them rather than pausing for a fixed amount of time; the group has to be told up front how many finishes to expect, and each task has to report its own finish. Report helpful failures showing the count you got against the one you wanted.",
+    "objective": "Practice writing a test that actually exercises concurrent access, coordinating many concurrent tasks and waiting for all of them before asserting.",
+    "difficulty": 8,
+    "language": "go",
+    "topic": "testing",
+    "kind": "test_writing",
+    "subject_code": "package exercise\n\nimport \"sync\"\n\ntype Counter struct {\n\tmu    sync.Mutex\n\tvalue int\n}\n\nfunc NewCounter() *Counter {\n\treturn &Counter{}\n}\n\nfunc (c *Counter) Inc() {\n\tc.mu.Lock()\n\tdefer c.mu.Unlock()\n\tc.value++\n}\n\nfunc (c *Counter) Value() int {\n\tc.mu.Lock()\n\tdefer c.mu.Unlock()\n\treturn c.value\n}\n",
+    "mutants": [
+      "package exercise\n\nimport (\n\t\"runtime\"\n\t\"sync\"\n)\n\ntype Counter struct {\n\tmu    sync.Mutex\n\tvalue int\n}\n\nfunc NewCounter() *Counter {\n\treturn &Counter{}\n}\n\nfunc (c *Counter) Inc() {\n\tv := c.value\n\truntime.Gosched()\n\tc.value = v + 1\n}\n\nfunc (c *Counter) Value() int {\n\tc.mu.Lock()\n\tdefer c.mu.Unlock()\n\treturn c.value\n}\n",
+      "package exercise\n\nimport \"sync\"\n\ntype Counter struct {\n\tmu    sync.Mutex\n\tvalue int\n}\n\nfunc NewCounter() *Counter {\n\treturn &Counter{}\n}\n\nfunc (c *Counter) Inc() {\n\tc.mu.Lock()\n\tdefer c.mu.Unlock()\n\tc.value += 2\n}\n\nfunc (c *Counter) Value() int {\n\tc.mu.Lock()\n\tdefer c.mu.Unlock()\n\treturn c.value\n}\n",
+      "package exercise\n\nimport \"sync\"\n\ntype Counter struct {\n\tmu    sync.Mutex\n\tvalue int\n}\n\nfunc NewCounter() *Counter {\n\treturn &Counter{value: 1}\n}\n\nfunc (c *Counter) Inc() {\n\tc.mu.Lock()\n\tdefer c.mu.Unlock()\n\tc.value++\n}\n\nfunc (c *Counter) Value() int {\n\tc.mu.Lock()\n\tdefer c.mu.Unlock()\n\treturn c.value\n}\n"
+    ],
+    "mutant_hints": [
+      "loses increments when several of them happen at the same time",
+      "counts every increment twice",
+      "starts a fresh counter at one instead of zero"
+    ],
+    "metadata": {
+      "source": "Learn Go With Tests - Sync (https://quii.gitbook.io/learn-go-with-tests/go-fundamentals/sync)"
+    }
+  }
+]
