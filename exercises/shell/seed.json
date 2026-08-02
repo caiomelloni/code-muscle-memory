@@ -1,0 +1,187 @@
+[
+  {
+    "id": "sh-001-list-directory",
+    "title": "Seeing what is in front of you",
+    "description": "You have just arrived in a directory and want to know what it holds. Print the name of every entry in the current directory, one name per line and nothing else: no sizes, no dates, no permissions. The names may come out in any order.",
+    "objective": "Practise the command that lists a directory's contents.",
+    "difficulty": 1,
+    "topic": "navigation",
+    "setup": "printf 'buy milk\\nrenew passport\\n' > todo.md\nprintf 'revenue is up\\n' > report.txt\nmkdir drafts\n",
+    "check": "expected=$(printf '%s\\n' drafts report.txt todo.md)\nactual=$(sort \"$CMM_STDOUT\")\nif [ \"$actual\" != \"$expected\" ]; then\n  echo \"Expected these three names, one per line:\"\n  printf '%s\\n' \"$expected\"\n  exit 1\nfi\n",
+    "solution": "ls\n",
+    "language": "shell",
+    "metadata": {
+      "source": "Linux command line fundamentals"
+    }
+  },
+  {
+    "id": "sh-002-show-a-file",
+    "title": "Reading a file without opening an editor",
+    "description": "Print everything inside notes.txt, exactly as it is stored, without opening an editor and without printing anything else.",
+    "objective": "Practise the command that dumps a file's contents to the screen.",
+    "difficulty": 1,
+    "topic": "files",
+    "setup": "printf 'call the bank\\nwater the plants\\nfix the gate\\n' > notes.txt\n",
+    "check": "expected=$(printf 'call the bank\\nwater the plants\\nfix the gate\\n')\nactual=$(cat \"$CMM_STDOUT\")\nif [ \"$actual\" != \"$expected\" ]; then\n  echo \"Expected the file's three lines, unchanged and on their own.\"\n  exit 1\nfi\n",
+    "solution": "cat notes.txt\n",
+    "language": "shell",
+    "metadata": {
+      "source": "Linux command line fundamentals"
+    }
+  },
+  {
+    "id": "sh-003-count-lines",
+    "title": "How long is this file?",
+    "description": "Print how many lines access.log has. Print the number on its own: no file name beside it, no other text.",
+    "objective": "Practise the counting command and feeding a file into a command's input.",
+    "difficulty": 2,
+    "topic": "text",
+    "setup": "for i in 1 2 3 4 5 6 7 8 9 10 11 12; do\n  printf 'request %s handled\\n' \"$i\"\ndone > access.log\n",
+    "check": "actual=$(tr -d '[:space:]' < \"$CMM_STDOUT\")\nif [ \"$actual\" != \"12\" ]; then\n  echo \"Expected just the number 12; got: $(cat \"$CMM_STDOUT\")\"\n  exit 1\nfi\n",
+    "solution": "wc -l < access.log\n",
+    "language": "shell",
+    "metadata": {
+      "source": "Linux command line fundamentals"
+    }
+  },
+  {
+    "id": "sh-004-last-lines",
+    "title": "Just the end of the file",
+    "description": "deploy.log is long and only its ending matters. Print its last three lines, in the order they appear in the file, and nothing else.",
+    "objective": "Practise the command that prints the end of a file, and limiting how much it prints.",
+    "difficulty": 2,
+    "topic": "text",
+    "setup": "for i in 1 2 3 4 5 6 7 8; do\n  printf 'step %s done\\n' \"$i\"\ndone > deploy.log\n",
+    "check": "expected=$(printf 'step 6 done\\nstep 7 done\\nstep 8 done')\nactual=$(cat \"$CMM_STDOUT\")\nif [ \"$actual\" != \"$expected\" ]; then\n  echo \"Expected the last three lines of the file, in file order.\"\n  exit 1\nfi\n",
+    "solution": "tail -3 deploy.log\n",
+    "language": "shell",
+    "metadata": {
+      "source": "Linux command line fundamentals"
+    }
+  },
+  {
+    "id": "sh-005-make-nested-directories",
+    "title": "Building a path that does not exist yet",
+    "description": "The current directory is empty. Create the directory project/src/utils with one command. None of the directories on that path exist yet, so the command has to be told to create the missing parents as it goes rather than failing on the first one.",
+    "objective": "Practise creating directories, including a whole path of them at once.",
+    "difficulty": 3,
+    "topic": "files",
+    "check": "if [ ! -d project/src/utils ]; then\n  echo \"There is no directory at project/src/utils.\"\n  exit 1\nfi\n",
+    "solution": "mkdir -p project/src/utils\n",
+    "language": "shell",
+    "metadata": {
+      "source": "Linux command line fundamentals"
+    }
+  },
+  {
+    "id": "sh-006-rename-a-file",
+    "title": "Giving a file a new name",
+    "description": "notes.txt should have been called notes.md all along. Rename it, keeping its contents. Afterwards nothing called notes.txt should be left behind.",
+    "objective": "Practise the command that moves a file, and the fact that moving is also how renaming is done.",
+    "difficulty": 3,
+    "topic": "files",
+    "setup": "printf 'first draft\\n' > notes.txt\n",
+    "check": "if [ -e notes.txt ]; then\n  echo \"notes.txt is still there; the file should have been renamed, not copied.\"\n  exit 1\nfi\nif [ ! -f notes.md ]; then\n  echo \"There is no file called notes.md.\"\n  exit 1\nfi\nif [ \"$(cat notes.md)\" != \"first draft\" ]; then\n  echo \"notes.md does not hold the original contents.\"\n  exit 1\nfi\n",
+    "solution": "mv notes.txt notes.md\n",
+    "language": "shell",
+    "metadata": {
+      "source": "Linux command line fundamentals"
+    }
+  },
+  {
+    "id": "sh-007-copy-a-directory",
+    "title": "Copying a whole tree",
+    "description": "Make a copy of the site directory called backup, holding everything site holds, nested files included. Leave site itself exactly as it is. Copying a directory rather than a plain file has to be asked for explicitly, or the command refuses.",
+    "objective": "Practise copying, and asking for a copy that descends into directories.",
+    "difficulty": 4,
+    "topic": "files",
+    "setup": "mkdir -p site/css\nprintf '<h1>hello</h1>\\n' > site/index.html\nprintf 'body { margin: 0 }\\n' > site/css/main.css\n",
+    "check": "for path in site/index.html site/css/main.css backup/index.html backup/css/main.css; do\n  if [ ! -f \"$path\" ]; then\n    echo \"Expected a file at $path.\"\n    exit 1\n  fi\ndone\nif [ \"$(cat backup/css/main.css)\" != \"body { margin: 0 }\" ]; then\n  echo \"The copied files do not hold the original contents.\"\n  exit 1\nfi\n",
+    "solution": "cp -r site backup\n",
+    "language": "shell",
+    "metadata": {
+      "source": "Linux command line fundamentals"
+    }
+  },
+  {
+    "id": "sh-008-append-a-line",
+    "title": "Adding to a file instead of replacing it",
+    "description": "Add a line reading exactly \"cheese\" to the end of shopping.txt. The lines already in the file must survive: the obvious way of sending output into a file empties it first, and this must not.",
+    "objective": "Practise sending a command's output into a file so that it is added to the end rather than replacing what is there.",
+    "difficulty": 4,
+    "topic": "redirection",
+    "setup": "printf 'bread\\nolives\\n' > shopping.txt\n",
+    "check": "expected=$(printf 'bread\\nolives\\ncheese')\nactual=$(cat shopping.txt)\nif [ \"$actual\" != \"$expected\" ]; then\n  echo \"shopping.txt should read bread, olives, cheese, one per line. It reads:\"\n  cat shopping.txt\n  exit 1\nfi\n",
+    "solution": "echo cheese >> shopping.txt\n",
+    "language": "shell",
+    "metadata": {
+      "source": "Linux command line fundamentals"
+    }
+  },
+  {
+    "id": "sh-009-find-by-name",
+    "title": "Hunting for files anywhere below you",
+    "description": "Somewhere under the current directory there are files whose names end in .log, at different depths. Print the path of every one of them, however deep it is buried. Paths may come out in any order, and may be written with or without a leading \"./\".",
+    "objective": "Practise searching a whole directory tree for files by name pattern.",
+    "difficulty": 5,
+    "topic": "search",
+    "required_commands": [
+      "find"
+    ],
+    "setup": "mkdir -p var/log services/api/logs\nprintf 'started\\n' > var/log/system.log\nprintf 'ok\\n' > services/api/logs/api.log\nprintf 'ok\\n' > services/api/README.md\nprintf 'boot\\n' > boot.log\n",
+    "check": "expected=$(printf '%s\\n' boot.log services/api/logs/api.log var/log/system.log)\nactual=$(sed 's|^\\./||' \"$CMM_STDOUT\" | sort)\nif [ \"$actual\" != \"$expected\" ]; then\n  echo \"Expected these three paths:\"\n  printf '%s\\n' \"$expected\"\n  exit 1\nfi\n",
+    "solution": "find . -name '*.log'\n",
+    "language": "shell",
+    "metadata": {
+      "source": "Linux command line fundamentals"
+    }
+  },
+  {
+    "id": "sh-010-filter-matching-lines",
+    "title": "Only the lines that matter",
+    "description": "server.log mixes routine lines with failures. Print only the lines containing the word ERROR, in the order they appear in the file, unchanged and with nothing added.",
+    "objective": "Practise searching a file's contents for lines matching a pattern.",
+    "difficulty": 5,
+    "topic": "search",
+    "required_commands": [
+      "grep"
+    ],
+    "setup": "printf 'INFO booting\\nERROR disk full\\nINFO retrying\\nERROR timeout\\nINFO done\\n' > server.log\n",
+    "check": "expected=$(printf 'ERROR disk full\\nERROR timeout')\nactual=$(cat \"$CMM_STDOUT\")\nif [ \"$actual\" != \"$expected\" ]; then\n  echo \"Expected exactly the two ERROR lines, in file order.\"\n  exit 1\nfi\n",
+    "solution": "grep ERROR server.log\n",
+    "language": "shell",
+    "metadata": {
+      "source": "Linux command line fundamentals"
+    }
+  },
+  {
+    "id": "sh-011-make-a-script-runnable",
+    "title": "Letting a file be run",
+    "description": "deploy.sh is a shell script, but the system will not run it: it is marked as data rather than as something executable. Give it permission to be executed, leaving its contents alone.",
+    "objective": "Practise changing a file's permissions, in particular making it executable.",
+    "difficulty": 6,
+    "topic": "permissions",
+    "setup": "printf '#!/bin/sh\\necho deploying\\n' > deploy.sh\nchmod 644 deploy.sh\n",
+    "check": "if [ ! -x deploy.sh ]; then\n  echo \"deploy.sh still cannot be executed.\"\n  exit 1\nfi\nif [ \"$(./deploy.sh)\" != \"deploying\" ]; then\n  echo \"deploy.sh no longer does what it did; only its permissions needed changing.\"\n  exit 1\nfi\n",
+    "solution": "chmod +x deploy.sh\n",
+    "language": "shell",
+    "metadata": {
+      "source": "Linux command line fundamentals"
+    }
+  },
+  {
+    "id": "sh-012-unique-sorted-lines",
+    "title": "Feeding one command into another",
+    "description": "votes.txt holds one name per line, with names repeated and in no order. Print each name that appears, once each, in alphabetical order. Do it in a single command line, sending the output of one command straight into the next rather than saving anything in between.",
+    "objective": "Practise joining commands with a pipe, and the commands that order lines and collapse repeats.",
+    "difficulty": 7,
+    "topic": "pipes",
+    "setup": "printf 'ruth\\nchris\\nruth\\namy\\nchris\\nruth\\n' > votes.txt\n",
+    "check": "expected=$(printf 'amy\\nchris\\nruth')\nactual=$(cat \"$CMM_STDOUT\")\nif [ \"$actual\" != \"$expected\" ]; then\n  echo \"Expected amy, chris and ruth, one per line, in that order.\"\n  exit 1\nfi\nif ! grep -q '|' \"$CMM_COMMAND\"; then\n  echo \"Expected the output of one command to be piped into another.\"\n  exit 1\nfi\n",
+    "solution": "sort votes.txt | uniq\n",
+    "language": "shell",
+    "metadata": {
+      "source": "Linux command line fundamentals"
+    }
+  }
+]

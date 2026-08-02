@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"code-muscle-memory/internal/config"
 	"code-muscle-memory/internal/executor"
 	"code-muscle-memory/internal/exercise"
 	"code-muscle-memory/internal/scheduler"
@@ -25,17 +26,21 @@ import (
 type Config struct {
 	ExerciseDir  string
 	ProgressPath string
-	Stdout       io.Writer
-	Stderr       io.Writer
-	Stdin        io.Reader
-	Now          func() time.Time
+	ConfigPath   string
+	// Language names the deck being practised. Decks are separate: only their
+	// exercises are served, and each keeps its own in-progress card.
+	Language string
+	Stdout   io.Writer
+	Stderr   io.Writer
+	Stdin    io.Reader
+	Now      func() time.Time
 }
 
 type App struct {
 	cfg       Config
 	store     storage.Store
+	settings  config.Store
 	scheduler scheduler.Scheduler
-	executor  executor.GoExecutor
 }
 
 func New(cfg Config) App {
@@ -51,12 +56,60 @@ func New(cfg Config) App {
 	if cfg.Now == nil {
 		cfg.Now = time.Now
 	}
+	if strings.TrimSpace(cfg.Language) == "" {
+		cfg.Language = exercise.LanguageGo
+	}
 	return App{
 		cfg:       cfg,
 		store:     storage.NewJSONStore(cfg.ProgressPath),
+		settings:  config.NewJSONStore(cfg.ConfigPath),
 		scheduler: scheduler.NewSM2(),
-		executor:  executor.NewGoExecutor(),
 	}
+}
+
+// Deck reports or changes the deck commands use when none is named on the
+// command line, so the deck someone is working through is remembered instead
+// of being spelled out on every invocation.
+func (a App) Deck(ctx context.Context, name string) error {
+	_ = ctx
+	settings, err := a.settings.Load()
+	if err != nil {
+		return err
+	}
+
+	if name == "" {
+		fmt.Fprintf(a.cfg.Stdout, "Default deck: %s\n", defaultDeck(settings))
+		fmt.Fprintln(a.cfg.Stdout, "Available: "+strings.Join(exercise.Languages(), ", "))
+		return nil
+	}
+	if !exercise.SupportsLanguage(name) {
+		return fmt.Errorf("unknown deck %q: use %s", name, strings.Join(exercise.Languages(), " or "))
+	}
+
+	settings.DefaultDeck = name
+	if err := a.settings.Save(settings); err != nil {
+		return err
+	}
+	fmt.Fprintf(a.cfg.Stdout, "Default deck is now %s. Commands use it unless -lang says otherwise.\n", name)
+	return nil
+}
+
+// defaultDeck resolves the configured deck, falling back to Go for a user who
+// has never chosen one and for a setting that names a deck no longer served.
+func defaultDeck(settings config.Config) string {
+	if exercise.SupportsLanguage(settings.DefaultDeck) {
+		return settings.DefaultDeck
+	}
+	return exercise.LanguageGo
+}
+
+// DefaultDeck is what the CLI resolves an unspecified -lang to.
+func DefaultDeck(configPath string) (string, error) {
+	settings, err := config.NewJSONStore(configPath).Load()
+	if err != nil {
+		return "", err
+	}
+	return defaultDeck(settings), nil
 }
 
 func (a App) Next(ctx context.Context) error {
@@ -66,7 +119,7 @@ func (a App) Next(ctx context.Context) error {
 	}
 
 	now := a.cfg.Now()
-	ex, ok := chooseNext(exercises, progress, now)
+	ex, ok := chooseNext(exercises, progress, a.cfg.Language, now)
 	if !ok {
 		fmt.Fprintln(a.cfg.Stdout, "No exercises available.")
 		return nil
@@ -77,7 +130,7 @@ func (a App) Next(ctx context.Context) error {
 		fmt.Fprintf(a.cfg.Stdout, "Next review is not due yet. Earliest: %s\n", item.DueAt.Format(time.RFC1123))
 		return nil
 	}
-	progress.CurrentExerciseID = ex.ID
+	progress.SetCurrent(a.cfg.Language, ex.ID)
 	if err := a.store.Save(progress); err != nil {
 		return err
 	}
@@ -92,7 +145,7 @@ func (a App) Next(ctx context.Context) error {
 
 	rating := a.promptRating(now, item)
 	delete(progress.Attempts, ex.ID)
-	progress.CurrentExerciseID = ""
+	progress.SetCurrent(a.cfg.Language, "")
 	progress.Items[ex.ID] = a.scheduler.Review(now, item, rating)
 	return a.store.Save(progress)
 }
@@ -118,7 +171,16 @@ func (a App) Try(ctx context.Context, id string) error {
 // runExercise opens the exercise in the editor, evaluates the solution, and
 // prints the outcome. It never touches stored progress.
 func (a App) runExercise(ctx context.Context, ex exercise.Exercise, previousAttempt string) (executor.Result, string, error) {
-	solutionPath, cleanup, err := writeStarter(ex, previousAttempt)
+	exe, err := executor.For(ex.Language)
+	if err != nil {
+		return executor.Result{}, "", err
+	}
+	preview, err := environmentPreview(ctx, exe, ex)
+	if err != nil {
+		return executor.Result{}, "", err
+	}
+
+	solutionPath, cleanup, err := writeStarter(ex, previousAttempt, preview)
 	if err != nil {
 		return executor.Result{}, "", err
 	}
@@ -133,31 +195,55 @@ func (a App) runExercise(ctx context.Context, ex exercise.Exercise, previousAtte
 	if err != nil {
 		return executor.Result{}, "", err
 	}
-	result, err := a.executor.Evaluate(ctx, ex, string(solution))
+	result, err := exe.Evaluate(ctx, ex, string(solution))
 	if err != nil {
 		return executor.Result{}, "", err
 	}
 
-	switch result.Status {
-	case executor.Success:
+	if result.Status == executor.Success {
 		fmt.Fprintln(a.cfg.Stdout, "\nPASS")
 		if strings.TrimSpace(result.Output) != "" {
 			fmt.Fprintln(a.cfg.Stdout, result.Output)
 		}
-	case executor.CompileError:
-		fmt.Fprintln(a.cfg.Stdout, "\nCOMPILE ERROR")
-		fmt.Fprintln(a.cfg.Stdout, result.Output)
-	case executor.TestFailure:
-		fmt.Fprintln(a.cfg.Stdout, "\nTEST FAILURE")
-		fmt.Fprintln(a.cfg.Stdout, result.Output)
-	case executor.MutantEscaped:
-		fmt.Fprintln(a.cfg.Stdout, "\nINCOMPLETE TEST")
-		fmt.Fprintln(a.cfg.Stdout, result.Output)
-	case executor.MissingFeature:
-		fmt.Fprintln(a.cfg.Stdout, "\nMISSING STRUCTURE")
-		fmt.Fprintln(a.cfg.Stdout, result.Output)
+		return result, string(solution), nil
 	}
+	fmt.Fprintf(a.cfg.Stdout, "\n%s\n%s\n", failureHeadline(result.Status), result.Output)
 	return result, string(solution), nil
+}
+
+// failureHeadline names what went wrong in the words of the exercise's own
+// language: a Go submission fails to compile or fails its tests, a command
+// line fails to run or runs and does the wrong thing.
+func failureHeadline(status executor.Status) string {
+	switch status {
+	case executor.CompileError:
+		return "COMPILE ERROR"
+	case executor.TestFailure:
+		return "TEST FAILURE"
+	case executor.MutantEscaped:
+		return "INCOMPLETE TEST"
+	case executor.MissingFeature:
+		return "MISSING STRUCTURE"
+	case executor.CommandError:
+		return "COMMAND ERROR"
+	case executor.CheckFailure:
+		return "WRONG RESULT"
+	case executor.MissingCommand:
+		return "WRONG TOOL"
+	default:
+		return "FAILED"
+	}
+}
+
+// environmentPreview describes the starting state of exercises that have one,
+// so a user answering blind knows what they are working with. Languages whose
+// exercises start from nothing return nothing.
+func environmentPreview(ctx context.Context, exe executor.Executor, ex exercise.Exercise) (string, error) {
+	previewer, ok := exe.(executor.Previewer)
+	if !ok {
+		return "", nil
+	}
+	return previewer.Preview(ctx, ex)
 }
 
 // saveAttempt persists the user's unsuccessful submission so it can be
@@ -209,8 +295,10 @@ func (a App) Stats(ctx context.Context) error {
 			due++
 		}
 	}
-	fmt.Fprintf(a.cfg.Stdout, "Exercises: %d\nNew: %d\nLearning: %d\nDue now: %d\n", len(exercises), newCount, learning, due)
-	fmt.Fprintln(a.cfg.Stdout, nextUpLine(exercises, progress, now))
+	// The deck is named because it no longer has to be typed to be in use: a
+	// remembered default should still be visible.
+	fmt.Fprintf(a.cfg.Stdout, "Deck: %s\nExercises: %d\nNew: %d\nLearning: %d\nDue now: %d\n", a.cfg.Language, len(exercises), newCount, learning, due)
+	fmt.Fprintln(a.cfg.Stdout, a.nextUpLine(exercises, progress, now))
 	return nil
 }
 
@@ -218,8 +306,8 @@ func (a App) Stats(ctx context.Context) error {
 // never disagree with the queue. Its status is included because the exercise
 // is not necessarily available yet: when nothing is due, chooseNext falls back
 // to the earliest upcoming review.
-func nextUpLine(exercises []exercise.Exercise, progress storage.ProgressFile, now time.Time) string {
-	ex, ok := chooseNext(exercises, progress, now)
+func (a App) nextUpLine(exercises []exercise.Exercise, progress storage.ProgressFile, now time.Time) string {
+	ex, ok := chooseNext(exercises, progress, a.cfg.Language, now)
 	if !ok {
 		return "Next up: none"
 	}
@@ -260,8 +348,8 @@ func (a App) Delete(ctx context.Context, id string) error {
 		delete(progress.Attempts, ex.ID)
 		cleared = append(cleared, "saved attempt")
 	}
-	if progress.CurrentExerciseID == ex.ID {
-		progress.CurrentExerciseID = ""
+	if progress.CurrentFor(ex.Language) == ex.ID {
+		progress.SetCurrent(ex.Language, "")
 		cleared = append(cleared, "in-progress marker")
 	}
 	if len(cleared) > 0 {
@@ -296,11 +384,10 @@ func (a App) Reset(ctx context.Context, id string) error {
 		return err
 	}
 	if id == "" {
-		if progress.CurrentExerciseID == "" {
+		if id = progress.CurrentFor(a.cfg.Language); id == "" {
 			fmt.Fprintln(a.cfg.Stdout, "No exercise is in progress; pass an exercise id to reset a specific one.")
 			return nil
 		}
-		id = progress.CurrentExerciseID
 	}
 	ex, ok := findExercise(exercises, id)
 	if !ok {
@@ -335,7 +422,6 @@ func (a App) confirm(prompt string) bool {
 // Describe prints an exercise's full instructions and review status without
 // opening it in $EDITOR, so a user can preview what an exercise asks for.
 func (a App) Describe(ctx context.Context, id string) error {
-	_ = ctx
 	exercises, progress, err := a.load()
 	if err != nil {
 		return err
@@ -343,6 +429,14 @@ func (a App) Describe(ctx context.Context, id string) error {
 	ex, ok := findExercise(exercises, id)
 	if !ok {
 		return fmt.Errorf("exercise %q not found", id)
+	}
+	exe, err := executor.For(ex.Language)
+	if err != nil {
+		return err
+	}
+	preview, err := environmentPreview(ctx, exe, ex)
+	if err != nil {
+		return err
 	}
 
 	item, hasProgress := progress.Items[ex.ID]
@@ -355,6 +449,9 @@ func (a App) Describe(ctx context.Context, id string) error {
 	fmt.Fprintln(a.cfg.Stdout)
 	for _, instruction := range kindInstructions(ex) {
 		fmt.Fprintln(a.cfg.Stdout, instruction)
+	}
+	if strings.TrimSpace(preview) != "" {
+		fmt.Fprintf(a.cfg.Stdout, "\n%s\n", preview)
 	}
 	return nil
 }
@@ -371,7 +468,11 @@ func (a App) Validate(ctx context.Context) error {
 
 	failures := 0
 	for _, ex := range exercises {
-		problems, err := a.executor.VerifyAuthoring(ctx, ex)
+		exe, err := executor.For(ex.Language)
+		if err != nil {
+			return err
+		}
+		problems, err := exe.VerifyAuthoring(ctx, ex)
 		if err != nil {
 			return err
 		}
@@ -480,13 +581,13 @@ func formatInterval(d time.Duration) string {
 	return fmt.Sprintf("%dd", int(d/(24*time.Hour)))
 }
 
-func chooseNext(exercises []exercise.Exercise, progress storage.ProgressFile, now time.Time) (exercise.Exercise, bool) {
+func chooseNext(exercises []exercise.Exercise, progress storage.ProgressFile, language string, now time.Time) (exercise.Exercise, bool) {
 	if len(exercises) == 0 {
 		return exercise.Exercise{}, false
 	}
-	if progress.CurrentExerciseID != "" {
+	if current := progress.CurrentFor(language); current != "" {
 		for _, ex := range exercises {
-			if ex.ID == progress.CurrentExerciseID {
+			if ex.ID == current {
 				return ex, true
 			}
 		}
@@ -544,19 +645,17 @@ func chooseNext(exercises []exercise.Exercise, progress storage.ProgressFile, no
 	return earliest, true
 }
 
-func writeStarter(ex exercise.Exercise, previousAttempt string) (string, func(), error) {
+func writeStarter(ex exercise.Exercise, previousAttempt, preview string) (string, func(), error) {
 	dir, err := os.MkdirTemp("", "cmm-edit-*")
 	if err != nil {
 		return "", nil, err
 	}
 	cleanup := func() { _ = os.RemoveAll(dir) }
-	path := filepath.Join(dir, "solution.go")
+	file := editorFileFor(ex.Language)
+	path := filepath.Join(dir, file.name)
 	code := previousAttempt
 	if strings.TrimSpace(code) == "" {
-		code = starterWithInstructions(ex)
-	}
-	if strings.TrimSpace(code) == "" {
-		code = "package exercise\n"
+		code = starterWithInstructions(ex, preview)
 	}
 	if err := os.WriteFile(path, []byte(code), 0o644); err != nil {
 		cleanup()
@@ -565,22 +664,43 @@ func writeStarter(ex exercise.Exercise, previousAttempt string) (string, func(),
 	return path, cleanup, nil
 }
 
-func starterWithInstructions(ex exercise.Exercise) string {
-	lines := []string{
-		"// " + ex.Title,
-		"//",
-		"// What to do: " + ex.Description,
+// editorFile describes the file the user writes their answer in: what to call
+// it so the editor highlights it correctly, how to mark up the instructions
+// carried at the top, and what the answer has to be wrapped in, if anything.
+type editorFile struct {
+	name    string
+	comment string
+	trailer []string
+}
+
+func editorFileFor(language string) editorFile {
+	if language == exercise.LanguageShell {
+		return editorFile{name: "solution.sh", comment: "#", trailer: []string{""}}
 	}
+	return editorFile{name: "solution.go", comment: "//", trailer: []string{"", "package exercise", ""}}
+}
+
+func starterWithInstructions(ex exercise.Exercise, preview string) string {
+	file := editorFileFor(ex.Language)
+	lines := []string{
+		file.comment + " " + ex.Title,
+		file.comment,
+	}
+	lines = appendCommentBlock(lines, file.comment, "What to do: "+ex.Description)
 	if strings.TrimSpace(ex.Objective) != "" {
-		lines = append(lines, "// Objective: "+ex.Objective)
+		lines = appendCommentBlock(lines, file.comment, "Objective: "+ex.Objective)
 	}
 
 	for _, instruction := range kindInstructions(ex) {
-		lines = append(lines, "//")
-		lines = appendCommentBlock(lines, "", instruction)
+		lines = append(lines, file.comment)
+		lines = appendCommentBlock(lines, file.comment, instruction)
+	}
+	if strings.TrimSpace(preview) != "" {
+		lines = append(lines, file.comment)
+		lines = appendCommentBlock(lines, file.comment, preview)
 	}
 
-	lines = append(lines, "", "package exercise", "")
+	lines = append(lines, file.trailer...)
 	return strings.Join(lines, "\n")
 }
 
@@ -589,6 +709,12 @@ func starterWithInstructions(ex exercise.Exercise) string {
 // given plus what test functions to write.
 func kindInstructions(ex exercise.Exercise) []string {
 	switch ex.EffectiveKind() {
+	case exercise.KindCommand:
+		instructions := []string{"Write: the command line that does this"}
+		for _, name := range ex.RequiredCommands {
+			instructions = append(instructions, "Use: the "+name+" command")
+		}
+		return instructions
 	case exercise.KindTestWriting:
 		var instructions []string
 		for _, target := range implementationTargets(ex.SubjectCode) {
@@ -776,13 +902,16 @@ func nodeString(fileSet *token.FileSet, node any) string {
 	return builder.String()
 }
 
-func appendCommentBlock(lines []string, prefix, text string) []string {
-	for i, line := range strings.Split(text, "\n") {
-		if i == 0 {
-			lines = append(lines, "// "+prefix+line)
+// appendCommentBlock adds text to the instruction header, commenting out every
+// line of it so a multi-line block — a directory listing, say — stays clear of
+// the space the answer goes in.
+func appendCommentBlock(lines []string, comment, text string) []string {
+	for _, line := range strings.Split(text, "\n") {
+		if strings.TrimSpace(line) == "" {
+			lines = append(lines, comment)
 			continue
 		}
-		lines = append(lines, "// "+line)
+		lines = append(lines, comment+" "+line)
 	}
 	return lines
 }

@@ -176,3 +176,94 @@ func TestLoadDirRejectsDuplicates(t *testing.T) {
 		t.Fatal("LoadDir succeeded with duplicate IDs")
 	}
 }
+
+func shellExercise() Exercise {
+	return Exercise{
+		ID:          "sh-001",
+		Title:       "A",
+		Description: "desc",
+		Language:    LanguageShell,
+		Topic:       "files",
+		Difficulty:  1,
+		Check:       "test -f wanted",
+	}
+}
+
+func TestValidateShellDefaultsKindToCommand(t *testing.T) {
+	ex := shellExercise()
+	if err := ex.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := ex.EffectiveKind(), KindCommand; got != want {
+		t.Fatalf("EffectiveKind() = %q, want %q", got, want)
+	}
+}
+
+func TestValidateShellRequiresCheck(t *testing.T) {
+	ex := shellExercise()
+	ex.Check = ""
+
+	err := ex.Validate()
+	if err == nil {
+		t.Fatal("Validate() succeeded, want error for missing check")
+	}
+	if !strings.Contains(err.Error(), "check") {
+		t.Fatalf("Validate() error = %q, want it to mention the missing check", err)
+	}
+}
+
+func TestValidateShellRejectsGoFields(t *testing.T) {
+	ex := shellExercise()
+	ex.Tests = "package exercise"
+
+	err := ex.Validate()
+	if err == nil {
+		t.Fatal("Validate() succeeded, want error for a Go-only field on a shell exercise")
+	}
+	if !strings.Contains(err.Error(), "tests") {
+		t.Fatalf("Validate() error = %q, want it to name the unsupported field", err)
+	}
+}
+
+func TestValidateRejectsShellFieldsOnGoExercises(t *testing.T) {
+	ex := Exercise{
+		ID:          "go-001",
+		Title:       "A",
+		Description: "desc",
+		Language:    LanguageGo,
+		Topic:       "topic",
+		Difficulty:  1,
+		Tests:       "package exercise",
+		Check:       "test -f wanted",
+	}
+
+	err := ex.Validate()
+	if err == nil {
+		t.Fatal("Validate() succeeded, want error for a shell-only field on a Go exercise")
+	}
+	if !strings.Contains(err.Error(), "check") {
+		t.Fatalf("Validate() error = %q, want it to name the unsupported field", err)
+	}
+}
+
+func TestValidateRejectsTestWritingShellExercise(t *testing.T) {
+	ex := shellExercise()
+	ex.Kind = KindTestWriting
+
+	if err := ex.Validate(); err == nil {
+		t.Fatal("Validate() succeeded, want error for a kind shell exercises do not support")
+	}
+}
+
+func TestValidateRejectsUnsupportedLanguage(t *testing.T) {
+	ex := shellExercise()
+	ex.Language = "python"
+
+	err := ex.Validate()
+	if err == nil {
+		t.Fatal("Validate() succeeded, want error for an unsupported language")
+	}
+	if !strings.Contains(err.Error(), "python") {
+		t.Fatalf("Validate() error = %q, want it to name the language", err)
+	}
+}

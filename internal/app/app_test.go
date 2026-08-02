@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"code-muscle-memory/internal/executor"
 	"code-muscle-memory/internal/exercise"
 	"code-muscle-memory/internal/scheduler"
 	"code-muscle-memory/internal/storage"
@@ -25,7 +26,7 @@ func TestChooseNextPrefersDueReviewsOverNew(t *testing.T) {
 		},
 	}
 
-	got, ok := chooseNext(exercises, progress, now)
+	got, ok := chooseNext(exercises, progress, "go", now)
 	if !ok {
 		t.Fatal("chooseNext returned false")
 	}
@@ -47,7 +48,7 @@ func TestChooseNextPrefersDueLearningOverReviews(t *testing.T) {
 		},
 	}
 
-	got, ok := chooseNext(exercises, progress, now)
+	got, ok := chooseNext(exercises, progress, "go", now)
 	if !ok {
 		t.Fatal("chooseNext returned false")
 	}
@@ -63,7 +64,7 @@ func TestChooseNextOrdersNewExercisesByDifficulty(t *testing.T) {
 		{ID: "go-001", Difficulty: 1},
 	}
 
-	got, ok := chooseNext(exercises, storage.ProgressFile{Items: map[string]scheduler.Progress{}}, now)
+	got, ok := chooseNext(exercises, storage.ProgressFile{Items: map[string]scheduler.Progress{}}, "go", now)
 	if !ok {
 		t.Fatal("chooseNext returned false")
 	}
@@ -84,7 +85,7 @@ func TestNextUpLine(t *testing.T) {
 			"go-002": {ExerciseID: "go-002", State: scheduler.StateReview, IntervalDays: 3, DueAt: now.Add(-time.Hour)},
 		}}
 
-		if got, want := nextUpLine(exercises, progress, now), "Next up: go-002 (due now)"; got != want {
+		if got, want := New(Config{}).nextUpLine(exercises, progress, now), "Next up: go-002 (due now)"; got != want {
 			t.Fatalf("nextUpLine() = %q, want %q", got, want)
 		}
 	})
@@ -92,7 +93,7 @@ func TestNextUpLine(t *testing.T) {
 	t.Run("names the easiest new exercise when nothing has been reviewed", func(t *testing.T) {
 		progress := storage.ProgressFile{Items: map[string]scheduler.Progress{}}
 
-		if got, want := nextUpLine(exercises, progress, now), "Next up: go-001 (new)"; got != want {
+		if got, want := New(Config{}).nextUpLine(exercises, progress, now), "Next up: go-001 (new)"; got != want {
 			t.Fatalf("nextUpLine() = %q, want %q", got, want)
 		}
 	})
@@ -103,7 +104,7 @@ func TestNextUpLine(t *testing.T) {
 			"go-002": {ExerciseID: "go-002", State: scheduler.StateReview, IntervalDays: 3, DueAt: now.Add(3 * 24 * time.Hour)},
 		}}
 
-		if got, want := nextUpLine(exercises, progress, now), "Next up: go-002 (due 2026-07-04)"; got != want {
+		if got, want := New(Config{}).nextUpLine(exercises, progress, now), "Next up: go-002 (due 2026-07-04)"; got != want {
 			t.Fatalf("nextUpLine() = %q, want %q", got, want)
 		}
 	})
@@ -114,13 +115,13 @@ func TestNextUpLine(t *testing.T) {
 			Items:             map[string]scheduler.Progress{},
 		}
 
-		if got, want := nextUpLine(exercises, progress, now), "Next up: go-002 (new)"; got != want {
+		if got, want := New(Config{}).nextUpLine(exercises, progress, now), "Next up: go-002 (new)"; got != want {
 			t.Fatalf("nextUpLine() = %q, want %q", got, want)
 		}
 	})
 
 	t.Run("reports none when there are no exercises", func(t *testing.T) {
-		if got, want := nextUpLine(nil, storage.ProgressFile{}, now), "Next up: none"; got != want {
+		if got, want := New(Config{}).nextUpLine(nil, storage.ProgressFile{}, now), "Next up: none"; got != want {
 			t.Fatalf("nextUpLine() = %q, want %q", got, want)
 		}
 	})
@@ -510,7 +511,7 @@ func TestWriteStarterPrependsInstructions(t *testing.T) {
 		StarterCode: "package exercise\n\nfunc Hello(name string) string { return \"\" }\n",
 	}
 
-	path, cleanup, err := writeStarter(ex, "")
+	path, cleanup, err := writeStarter(ex, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -548,7 +549,7 @@ func TestWriteStarterRestoresPreviousAttempt(t *testing.T) {
 	}
 	previousAttempt := "package exercise\n\nfunc Hello(name string) string {\n\treturn \"partial attempt\"\n}\n"
 
-	path, cleanup, err := writeStarter(ex, previousAttempt)
+	path, cleanup, err := writeStarter(ex, previousAttempt, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -570,7 +571,7 @@ func TestStarterInstructionsIncludeRequiredTypesAndMethods(t *testing.T) {
 		StarterCode: "package exercise\n\ntype Rectangle struct {\n\tWidth float64\n\tHeight float64\n}\n\nfunc (r Rectangle) Area() float64 {\n\treturn 0\n}\n",
 	}
 
-	got := starterWithInstructions(ex)
+	got := starterWithInstructions(ex, "")
 	for _, want := range []string{
 		"// Implement: a struct type called \"Rectangle\" with a field called \"Width\" of type float64 and a field called \"Height\" of type float64",
 		"// Implement: a method called \"Area\" on Rectangle, receives no parameters, and returns a float64",
@@ -593,7 +594,7 @@ func TestStarterInstructionsForTestWritingUseGivenPrefix(t *testing.T) {
 		SubjectCode: "package exercise\n\nfunc Double(n int) int {\n\treturn n * 2\n}\n",
 	}
 
-	got := starterWithInstructions(ex)
+	got := starterWithInstructions(ex, "")
 	for _, want := range []string{
 		"// Given: a function called \"Double\", receives a parameter called \"n\" of type int, and returns an int",
 		"// Write: one or more functions whose names start with \"Test\", each receiving a parameter called \"t\" of type pointer to testing.T and returning nothing",
@@ -619,7 +620,7 @@ func TestStarterInstructionsIncludeRequiredTestFeatures(t *testing.T) {
 		RequiredTestFeatures: []string{exercise.FeatureTable, exercise.FeatureSubtests},
 	}
 
-	got := starterWithInstructions(ex)
+	got := starterWithInstructions(ex, "")
 	for _, want := range []string{
 		"// Use: a table of test cases driven by a loop",
 		"// Use: named subtests, giving each case its own name",
@@ -646,7 +647,7 @@ func TestChooseNextFallsBackToEarliestFutureDue(t *testing.T) {
 		},
 	}
 
-	got, ok := chooseNext(exercises, progress, now)
+	got, ok := chooseNext(exercises, progress, "go", now)
 	if !ok {
 		t.Fatal("chooseNext returned false")
 	}
@@ -669,11 +670,165 @@ func TestChooseNextKeepsCurrentExerciseUntilSolved(t *testing.T) {
 		},
 	}
 
-	got, ok := chooseNext(exercises, progress, now)
+	got, ok := chooseNext(exercises, progress, "go", now)
 	if !ok {
 		t.Fatal("chooseNext returned false")
 	}
 	if got.ID != "go-001" {
 		t.Fatalf("chosen = %q, want go-001", got.ID)
+	}
+}
+
+func TestWriteStarterUsesAShellFileForShellExercises(t *testing.T) {
+	ex := exercise.Exercise{
+		Title:            "Count the lines",
+		Description:      "Print how many lines access.log has.",
+		Objective:        "Practise the counting command.",
+		Language:         exercise.LanguageShell,
+		RequiredCommands: []string{"wc"},
+	}
+	preview := "The working directory contains:\n    access.log"
+
+	path, cleanup, err := writeStarter(ex, "", preview)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	if got := filepath.Base(path); got != "solution.sh" {
+		t.Errorf("editable file = %q, want solution.sh so the editor knows what it is", got)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(data)
+	for _, want := range []string{
+		"# Count the lines",
+		"# What to do: Print how many lines access.log has.",
+		"# Write: the command line that does this",
+		"# Use: the wc command",
+		"# The working directory contains:",
+		"#     access.log",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("starter file missing %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "//") || strings.Contains(got, "package exercise") {
+		t.Fatalf("shell starter file should carry no Go scaffolding:\n%s", got)
+	}
+}
+
+// Each deck resumes its own half-answered exercise, so an evening on the shell
+// deck does not cost the Go card that was left open.
+func TestChooseNextResumesTheDecksOwnCurrentExercise(t *testing.T) {
+	now := time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC)
+	exercises := []exercise.Exercise{
+		{ID: "sh-001", Difficulty: 1, Language: exercise.LanguageShell},
+		{ID: "sh-002", Difficulty: 2, Language: exercise.LanguageShell},
+	}
+	progress := storage.ProgressFile{
+		CurrentExerciseID: "go-004",
+		Current:           map[string]string{"shell": "sh-002"},
+		Items:             map[string]scheduler.Progress{},
+	}
+
+	got, ok := chooseNext(exercises, progress, "shell", now)
+	if !ok {
+		t.Fatal("chooseNext returned false")
+	}
+	if got.ID != "sh-002" {
+		t.Fatalf("chooseNext() = %q, want the shell deck's own current exercise sh-002", got.ID)
+	}
+}
+
+func TestFailureHeadlineNamesWhatWentWrong(t *testing.T) {
+	cases := map[executor.Status]string{
+		executor.CompileError:   "COMPILE ERROR",
+		executor.TestFailure:    "TEST FAILURE",
+		executor.CommandError:   "COMMAND ERROR",
+		executor.CheckFailure:   "WRONG RESULT",
+		executor.MissingCommand: "WRONG TOOL",
+	}
+	for status, want := range cases {
+		if got := failureHeadline(status); got != want {
+			t.Errorf("failureHeadline(%q) = %q, want %q", status, got, want)
+		}
+	}
+}
+
+func TestDeckReportsTheDefaultWhenGivenNoName(t *testing.T) {
+	var out strings.Builder
+	a := New(Config{ConfigPath: filepath.Join(t.TempDir(), "config.json"), Stdout: &out})
+
+	if err := a.Deck(context.Background(), ""); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"Default deck: go", "go, shell"} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("output missing %q:\n%s", want, out.String())
+		}
+	}
+}
+
+func TestDeckRemembersTheChosenDeck(t *testing.T) {
+	var out strings.Builder
+	path := filepath.Join(t.TempDir(), "config.json")
+	a := New(Config{ConfigPath: path, Stdout: &out})
+
+	if err := a.Deck(context.Background(), exercise.LanguageShell); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "now shell") {
+		t.Errorf("output does not confirm the change:\n%s", out.String())
+	}
+
+	got, err := DefaultDeck(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != exercise.LanguageShell {
+		t.Fatalf("DefaultDeck() = %q, want it read back as shell", got)
+	}
+}
+
+func TestDeckRejectsADeckThatDoesNotExist(t *testing.T) {
+	var out strings.Builder
+	path := filepath.Join(t.TempDir(), "config.json")
+	a := New(Config{ConfigPath: path, Stdout: &out})
+
+	if err := a.Deck(context.Background(), "python"); err == nil {
+		t.Fatal("Deck() accepted a deck that does not exist")
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Error("a rejected deck name should not have been written to the config file")
+	}
+}
+
+func TestDefaultDeckFallsBackForAnUnconfiguredUser(t *testing.T) {
+	got, err := DefaultDeck(filepath.Join(t.TempDir(), "config.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != exercise.LanguageGo {
+		t.Fatalf("DefaultDeck() = %q, want go before anything has been configured", got)
+	}
+}
+
+// A config file naming a deck that no longer exists must not wedge every
+// command; the built-in default takes over.
+func TestDefaultDeckIgnoresADeckThatIsNoLongerServed(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.json")
+	if err := os.WriteFile(path, []byte(`{"default_deck":"cobol"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := DefaultDeck(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != exercise.LanguageGo {
+		t.Fatalf("DefaultDeck() = %q, want the built-in default", got)
 	}
 }

@@ -14,21 +14,6 @@ import (
 	"code-muscle-memory/internal/exercise"
 )
 
-type Status string
-
-const (
-	CompileError   Status = "compile_error"
-	TestFailure    Status = "test_failure"
-	MutantEscaped  Status = "mutant_escaped"
-	MissingFeature Status = "missing_feature"
-	Success        Status = "success"
-)
-
-type Result struct {
-	Status Status
-	Output string
-}
-
 type GoExecutor struct{}
 
 func NewGoExecutor() GoExecutor {

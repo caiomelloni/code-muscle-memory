@@ -82,3 +82,31 @@ func TestPrintHelpUnknownTopic(t *testing.T) {
 		t.Fatal("printHelp succeeded with unknown topic")
 	}
 }
+
+func TestPrintHelpDocumentsTheDecks(t *testing.T) {
+	var out bytes.Buffer
+	if err := printHelp(&out, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	got := out.String()
+	for _, want := range []string{"Decks:", "deck [name]", `cmm deck shell`, "-lang string", "-config string"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("help output missing %q:\n%s", want, got)
+		}
+	}
+}
+
+func TestPrintHelpDeckCommand(t *testing.T) {
+	var out bytes.Buffer
+	if err := printHelp(&out, []string{"deck"}); err != nil {
+		t.Fatal(err)
+	}
+
+	got := out.String()
+	for _, want := range []string{"cmm deck <name>", "cmm -lang go next"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("deck help output missing %q:\n%s", want, got)
+		}
+	}
+}

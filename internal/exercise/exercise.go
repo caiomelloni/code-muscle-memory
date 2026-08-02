@@ -2,7 +2,6 @@ package exercise
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,8 +10,29 @@ import (
 )
 
 const (
+	LanguageGo    = "go"
+	LanguageShell = "shell"
+)
+
+// Languages returns every deck the app can serve, in the order they should be
+// offered to the user.
+func Languages() []string {
+	return []string{LanguageGo, LanguageShell}
+}
+
+func SupportsLanguage(language string) bool {
+	for _, known := range Languages() {
+		if known == language {
+			return true
+		}
+	}
+	return false
+}
+
+const (
 	KindImplementation = "implementation"
 	KindTestWriting    = "test_writing"
+	KindCommand        = "command"
 )
 
 // Required test features are language-neutral concepts describing the shape a
@@ -46,17 +66,32 @@ type Exercise struct {
 	// RequiredTestFeatures lists structural features the user's test must
 	// exhibit, on top of passing the subject and killing every mutant. Only
 	// valid for test-writing exercises.
-	RequiredTestFeatures []string          `json:"required_test_features,omitempty"`
-	Metadata             map[string]string `json:"metadata,omitempty"`
+	RequiredTestFeatures []string `json:"required_test_features,omitempty"`
+
+	// Setup is a script that seeds the sandbox directory the user's command
+	// runs in. Check is the hidden script that decides whether the command did
+	// what the exercise asked. RequiredCommands names utilities the answer must
+	// invoke, for exercises whose point is recalling a specific tool. All three
+	// are only valid for shell exercises.
+	Setup            string   `json:"setup,omitempty"`
+	Check            string   `json:"check,omitempty"`
+	RequiredCommands []string `json:"required_commands,omitempty"`
+
+	Metadata map[string]string `json:"metadata,omitempty"`
 }
 
-// EffectiveKind returns the exercise's kind, defaulting to KindImplementation
-// for exercises authored before the "kind" field existed.
+// EffectiveKind returns the exercise's kind, defaulting to the only kind its
+// language supports out of the box: implementation for Go exercises authored
+// before the "kind" field existed, and command for shell exercises, which have
+// no second kind to distinguish.
 func (e Exercise) EffectiveKind() string {
-	if strings.TrimSpace(e.Kind) == "" {
-		return KindImplementation
+	if strings.TrimSpace(e.Kind) != "" {
+		return e.Kind
 	}
-	return e.Kind
+	if e.Language == LanguageShell {
+		return KindCommand
+	}
+	return KindImplementation
 }
 
 func LoadDir(dir string) ([]Exercise, error) {
@@ -140,15 +175,19 @@ func (e Exercise) Validate() error {
 		missing = append(missing, "difficulty")
 	}
 
-	switch e.EffectiveKind() {
-	case KindImplementation:
+	kind := e.EffectiveKind()
+	switch {
+	case strings.TrimSpace(e.Language) == "":
+		// Already reported as a missing field; the kind rules below are all
+		// language-specific and have nothing to say about it.
+	case e.Language == LanguageGo && kind == KindImplementation:
 		if strings.TrimSpace(e.Tests) == "" {
 			missing = append(missing, "tests")
 		}
 		if len(e.RequiredTestFeatures) > 0 {
 			return fmt.Errorf("exercise %q has required_test_features but is not a test-writing exercise", e.ID)
 		}
-	case KindTestWriting:
+	case e.Language == LanguageGo && kind == KindTestWriting:
 		if strings.TrimSpace(e.SubjectCode) == "" {
 			missing = append(missing, "subject_code")
 		}
@@ -163,15 +202,52 @@ func (e Exercise) Validate() error {
 				return fmt.Errorf("exercise %q has unknown required test feature %q", e.ID, feature)
 			}
 		}
+	case e.Language == LanguageShell && kind == KindCommand:
+		if strings.TrimSpace(e.Check) == "" {
+			missing = append(missing, "check")
+		}
+		if err := e.rejectGoFields(); err != nil {
+			return err
+		}
+	case !SupportsLanguage(e.Language):
+		return fmt.Errorf("exercise %q has unsupported language %q", e.ID, e.Language)
 	default:
-		return fmt.Errorf("exercise %q has unknown kind %q", e.ID, e.Kind)
+		return fmt.Errorf("exercise %q has kind %q, which %s exercises do not support", e.ID, kind, e.Language)
 	}
 
+	if e.Language != LanguageShell && (strings.TrimSpace(e.Setup) != "" || strings.TrimSpace(e.Check) != "" || len(e.RequiredCommands) > 0) {
+		return fmt.Errorf("exercise %q has setup, check, or required_commands but is not a shell exercise", e.ID)
+	}
 	if len(missing) > 0 {
 		return fmt.Errorf("exercise %q missing required fields: %s", e.ID, strings.Join(missing, ", "))
 	}
-	if e.Language != "go" {
-		return errors.New("v1 supports only go exercises")
+	return nil
+}
+
+// rejectGoFields reports Go-only fields carried by a shell exercise. They would
+// be silently ignored at grading time, which hides an authoring mistake.
+func (e Exercise) rejectGoFields() error {
+	var unsupported []string
+	if strings.TrimSpace(e.StarterCode) != "" {
+		unsupported = append(unsupported, "starter_code")
+	}
+	if strings.TrimSpace(e.Tests) != "" {
+		unsupported = append(unsupported, "tests")
+	}
+	if strings.TrimSpace(e.SubjectCode) != "" {
+		unsupported = append(unsupported, "subject_code")
+	}
+	if len(e.Mutants) > 0 {
+		unsupported = append(unsupported, "mutants")
+	}
+	if len(e.MutantHints) > 0 {
+		unsupported = append(unsupported, "mutant_hints")
+	}
+	if len(e.RequiredTestFeatures) > 0 {
+		unsupported = append(unsupported, "required_test_features")
+	}
+	if len(unsupported) > 0 {
+		return fmt.Errorf("exercise %q has %s, which shell exercises do not support", e.ID, strings.Join(unsupported, ", "))
 	}
 	return nil
 }
