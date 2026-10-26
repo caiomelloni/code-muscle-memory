@@ -832,3 +832,28 @@ func TestDefaultDeckIgnoresADeckThatIsNoLongerServed(t *testing.T) {
 		t.Fatalf("DefaultDeck() = %q, want the built-in default", got)
 	}
 }
+
+func TestNextKeepsWorkWhenEditorExitsNonZero(t *testing.T) {
+	var out strings.Builder
+	a, _, progressPath := newDeleteTestApp(t, "", &out)
+
+	// Mimic vi exiting 1 after a :wq that followed an error message.
+	written := "package exercise\n\nthis does not compile\n"
+	script := filepath.Join(t.TempDir(), "editor.sh")
+	if err := os.WriteFile(script, []byte("#!/bin/sh\nprintf '%s' '"+written+"' > \"$1\"\nexit 1\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("EDITOR", script)
+
+	if err := a.Next(context.Background()); err != nil {
+		t.Fatalf("Next returned %v, want the edited file evaluated despite the editor's exit status", err)
+	}
+
+	progress, err := storage.NewJSONStore(progressPath).Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := progress.Attempts["go-002"]; got != written {
+		t.Fatalf("saved attempt = %q, want the edited file %q", got, written)
+	}
+}

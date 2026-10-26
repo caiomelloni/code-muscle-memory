@@ -186,14 +186,26 @@ func (a App) runExercise(ctx context.Context, ex exercise.Exercise, previousAtte
 	}
 	defer cleanup()
 
-	a.printExercise(ex, solutionPath, previousAttempt != "")
-	if err := openEditor(ctx, solutionPath); err != nil {
+	starter, err := os.ReadFile(solutionPath)
+	if err != nil {
 		return executor.Result{}, "", err
 	}
+
+	a.printExercise(ex, solutionPath, previousAttempt != "")
+	editorErr := openEditor(ctx, solutionPath)
 
 	solution, err := os.ReadFile(solutionPath)
 	if err != nil {
 		return executor.Result{}, "", err
+	}
+	if editorErr != nil {
+		// vi exits non-zero whenever an error was shown during the session,
+		// even after a clean :wq. Only treat the exit as an abort when nothing
+		// was written; otherwise the temp file is deleted with the user's work.
+		if string(solution) == string(starter) {
+			return executor.Result{}, "", editorErr
+		}
+		fmt.Fprintf(a.cfg.Stdout, "warning: editor exited with %v; evaluating your saved file anyway\n", editorErr)
 	}
 	result, err := exe.Evaluate(ctx, ex, string(solution))
 	if err != nil {
