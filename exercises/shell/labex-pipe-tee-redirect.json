@@ -1,0 +1,32 @@
+[
+  {
+    "id": "sh-050-log-and-show",
+    "title": "Showing output while adding it to a log",
+    "description": "Print the contents of today.txt to the terminal and, in the same command, add them to the end of activity.log. The line already in activity.log must survive (the usual way of writing a copy to a file empties it first, and this must not). Only the contents of today.txt may be printed, nothing from the old log.",
+    "objective": "Practise copying a stream to a file in append mode while still passing it through to the terminal.",
+    "difficulty": 4,
+    "topic": "redirection",
+    "setup": "printf 'deploy finished\\n' > today.txt\nprintf 'earlier entry\\n' > activity.log\n",
+    "check": "if [ \"$(head -n 1 activity.log)\" != 'earlier entry' ]; then\n  echo \"The line already in activity.log was lost: it was overwritten instead of added to.\"\n  exit 1\nfi\nif [ \"$(tail -n 1 activity.log)\" != 'deploy finished' ]; then\n  echo \"activity.log should end with the contents of today.txt. It reads:\"\n  cat activity.log\n  exit 1\nfi\nif [ \"$(wc -l < activity.log | tr -d ' ')\" != 2 ]; then\n  echo \"activity.log should hold exactly the earlier entry plus today's line. It reads:\"\n  cat activity.log\n  exit 1\nfi\nif [ \"$(cat \"$CMM_STDOUT\")\" != 'deploy finished' ]; then\n  echo \"The terminal should show exactly the contents of today.txt. It showed:\"\n  cat \"$CMM_STDOUT\"\n  exit 1\nfi\n",
+    "solution": "tee -a activity.log < today.txt\n",
+    "language": "shell",
+    "metadata": {
+      "source": "LabEx — Pipe, tee and redirect (https://labex.io/lesson/pipe-tee-redirect)"
+    }
+  },
+  {
+    "id": "sh-051-save-all-show-matches",
+    "title": "Keeping the full stream, showing only matches",
+    "description": "List the names in the etc directory. Save the complete list, every name, to listing.txt, and print to the terminal only the names that contain conf. Do it in one command. listing.txt must hold the unfiltered list, not just the matches.",
+    "objective": "Practise saving a copy of a stream in the middle of a pipeline before it is filtered.",
+    "difficulty": 5,
+    "topic": "pipes",
+    "setup": "mkdir etc\ntouch etc/hosts etc/nginx.conf etc/passwd etc/resolv.conf\n",
+    "check": "for name in hosts nginx.conf passwd resolv.conf; do\n  if ! grep -q \"$name\" listing.txt 2>/dev/null; then\n    echo \"listing.txt should hold every name in etc, but $name is missing. The copy has to be saved before the filtering, not after.\"\n    exit 1\n  fi\ndone\nfor name in nginx.conf resolv.conf; do\n  if ! grep -q \"$name\" \"$CMM_STDOUT\"; then\n    echo \"The terminal should show $name, since it contains conf.\"\n    exit 1\n  fi\ndone\nfor name in hosts passwd; do\n  if grep -q \"$name\" \"$CMM_STDOUT\"; then\n    echo \"The terminal should show only names containing conf, but $name was printed too.\"\n    exit 1\n  fi\ndone\n",
+    "solution": "ls etc | tee listing.txt | grep conf\n",
+    "language": "shell",
+    "metadata": {
+      "source": "LabEx — Pipe, tee and redirect (https://labex.io/lesson/pipe-tee-redirect)"
+    }
+  }
+]

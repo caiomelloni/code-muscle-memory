@@ -1,0 +1,32 @@
+[
+  {
+    "id": "sh-055-columns-with-colon",
+    "title": "Join two lists side by side",
+    "description": "names.txt holds one user name per line and roles.txt holds the matching role on the same line number. Print them side by side: line 1 of names.txt with line 1 of roles.txt, then line 2 with line 2, and so on, joining each pair with a single colon. Example: alice and admin -> alice:admin. Print one pair per line, in file order, and nothing else. The default separator is not a colon, so the colon has to be asked for explicitly.",
+    "objective": "Practise merging files line by line as columns with a custom delimiter.",
+    "difficulty": 3,
+    "topic": "text",
+    "setup": "printf 'alice\\nbob\\ncarol\\n' > names.txt\nprintf 'admin\\nviewer\\neditor\\n' > roles.txt\n",
+    "check": "expected='alice:admin\nbob:viewer\ncarol:editor'\nif [ \"$(cat \"$CMM_STDOUT\")\" != \"$expected\" ]; then\n  echo \"Expected each name joined to its role by a colon, in file order:\"\n  echo \"$expected\"\n  echo \"Got:\"\n  cat \"$CMM_STDOUT\"\n  exit 1\nfi\n",
+    "solution": "paste -d ':' names.txt roles.txt\n",
+    "language": "shell",
+    "metadata": {
+      "source": "LabEx — paste command (https://labex.io/lesson/paste-command)"
+    }
+  },
+  {
+    "id": "sh-056-words-into-a-sentence",
+    "title": "Fold a word list into one line",
+    "description": "words.txt holds one word per line. Print all of its words on a single line, in file order, separated by exactly one space: no tab between words, no space before the first word or after the last. Example: the lines The, quick, brown, fox -> The quick brown fox. By default the words would be joined with tabs, so the space separator has to be asked for explicitly.",
+    "objective": "Practise turning the lines of one file into a single delimited line.",
+    "difficulty": 4,
+    "topic": "text",
+    "setup": "printf 'The\\nquick\\nbrown\\nfox\\njumps\\n' > words.txt\n",
+    "check": "expected='The quick brown fox jumps'\nif [ \"$(cat \"$CMM_STDOUT\")\" != \"$expected\" ]; then\n  echo \"Expected every word on one line, separated by single spaces:\"\n  echo \"$expected\"\n  echo \"Got:\"\n  cat -et \"$CMM_STDOUT\"\n  echo \"(Tabs show as ^I and line ends as \\$ above.)\"\n  exit 1\nfi\n",
+    "solution": "paste -s -d ' ' words.txt\n",
+    "language": "shell",
+    "metadata": {
+      "source": "LabEx — paste command (https://labex.io/lesson/paste-command)"
+    }
+  }
+]
