@@ -1,0 +1,92 @@
+[
+  {
+    "id": "sh-070-shout-a-file",
+    "title": "Upper-case a whole file",
+    "description": "notes.txt holds a few lines of mixed-case text. Print its whole content with every lowercase letter turned into uppercase, keeping digits, spaces and line breaks as they are, and nothing else. Example: the line Bob Jones 42 -> BOB JONES 42. The tool made for this takes no file name, so the file has to be fed to it another way.",
+    "objective": "Practise mapping one set of characters onto another, with the input coming from a file.",
+    "difficulty": 3,
+    "topic": "text",
+    "setup": "printf 'alice smith\\nBob Jones 42\\nmeet at 9am\\n' > notes.txt\n",
+    "check": "expected=$(printf 'ALICE SMITH\\nBOB JONES 42\\nMEET AT 9AM')\nif [ \"$(cat \"$CMM_STDOUT\")\" != \"$expected\" ]; then\n  echo \"Expected the whole file in uppercase:\"\n  echo \"$expected\"\n  echo \"Got:\"\n  cat \"$CMM_STDOUT\"\n  exit 1\nfi\n",
+    "solution": "tr '[:lower:]' '[:upper:]' < notes.txt\n",
+    "language": "shell",
+    "metadata": {
+      "source": "LabEx — tr command (https://labex.io/lesson/tr-translate-command)"
+    }
+  },
+  {
+    "id": "sh-071-tabs-to-commas",
+    "title": "Tabs into commas",
+    "description": "data.tsv separates its columns with tabs. Print its content with every tab replaced by a comma, leaving everything else as it is, and nothing else. Example: the line pete<TAB>beginner -> pete,beginner.",
+    "objective": "Practise swapping one character for another throughout the input.",
+    "difficulty": 3,
+    "topic": "text",
+    "setup": "printf 'name\\tlevel\\tcity\\npete\\tbeginner\\toslo\\nana\\texpert\\tlima\\n' > data.tsv\n",
+    "check": "expected=$(printf 'name,level,city\\npete,beginner,oslo\\nana,expert,lima')\nif [ \"$(cat \"$CMM_STDOUT\")\" != \"$expected\" ]; then\n  echo \"Expected every tab replaced by a comma:\"\n  echo \"$expected\"\n  echo \"Got:\"\n  cat -et \"$CMM_STDOUT\"\n  echo \"(Tabs show as ^I and line ends as \\$ above.)\"\n  exit 1\nfi\n",
+    "solution": "tr '\\t' ',' < data.tsv\n",
+    "language": "shell",
+    "metadata": {
+      "source": "LabEx — tr command (https://labex.io/lesson/tr-translate-command)"
+    }
+  },
+  {
+    "id": "sh-072-drop-the-digits",
+    "title": "Strip out every digit",
+    "description": "tickets.txt mixes words and digits. Print its content with every digit removed and everything else left exactly as it is, including spaces, and nothing else. Each digit goes on its own, so the spaces around a removed number stay. Example: the line Room 101 is open -> Room  is open, with two spaces where the number was.",
+    "objective": "Practise deleting every character that belongs to a set.",
+    "difficulty": 4,
+    "topic": "text",
+    "setup": "printf 'Room 101 is on floor 3 today\\nTicket A7B9 open\\n' > tickets.txt\n",
+    "check": "expected=$(printf 'Room  is on floor  today\\nTicket AB open')\nif [ \"$(cat \"$CMM_STDOUT\")\" != \"$expected\" ]; then\n  echo \"Expected every digit gone and all spaces kept:\"\n  echo \"$expected\"\n  echo \"Got:\"\n  cat \"$CMM_STDOUT\"\n  exit 1\nfi\n",
+    "solution": "tr -d '0-9' < tickets.txt\n",
+    "language": "shell",
+    "metadata": {
+      "source": "LabEx — tr command (https://labex.io/lesson/tr-translate-command)"
+    }
+  },
+  {
+    "id": "sh-073-squeeze-spaces",
+    "title": "Collapse runs of spaces",
+    "description": "columns.txt was padded by hand, so its words are separated by uneven runs of spaces. Print its content with every run of spaces reduced to a single space, keeping the line breaks, and nothing else. Example: the line bob   viewer -> bob viewer.",
+    "objective": "Practise reducing runs of a repeated character to one.",
+    "difficulty": 4,
+    "topic": "text",
+    "setup": "printf 'alice    admin\\nbob  viewer   active\\ncarol editor\\n' > columns.txt\n",
+    "check": "expected=$(printf 'alice admin\\nbob viewer active\\ncarol editor')\nif [ \"$(cat \"$CMM_STDOUT\")\" != \"$expected\" ]; then\n  echo \"Expected single spaces between words, on the same lines:\"\n  echo \"$expected\"\n  echo \"Got:\"\n  cat \"$CMM_STDOUT\"\n  exit 1\nfi\n",
+    "solution": "tr -s ' ' < columns.txt\n",
+    "language": "shell",
+    "metadata": {
+      "source": "LabEx — tr command (https://labex.io/lesson/tr-translate-command)"
+    }
+  },
+  {
+    "id": "sh-074-keep-only-alnum",
+    "title": "Keep only letters and digits",
+    "description": "emails.txt holds one address per line. Print its content with everything except letters, digits and line breaks removed, so each address stays on its own line, and nothing else. Example: the line user@example.com! -> userexamplecom. It is easier to name what stays than what goes, and a line break counts as a character too, so it has to be kept on purpose.",
+    "objective": "Practise deleting everything outside a set, keeping line boundaries deliberately.",
+    "difficulty": 5,
+    "topic": "text",
+    "setup": "printf 'user@example.com!\\nbob.jones+tag@mail2.org\\n' > emails.txt\n",
+    "check": "expected=$(printf 'userexamplecom\\nbobjonestagmail2org')\nif [ \"$(cat \"$CMM_STDOUT\")\" != \"$expected\" ]; then\n  echo \"Expected only letters and digits, with each address on its own line:\"\n  echo \"$expected\"\n  echo \"Got:\"\n  cat \"$CMM_STDOUT\"\n  exit 1\nfi\n",
+    "solution": "tr -cd '[:alnum:]\\n' < emails.txt\n",
+    "language": "shell",
+    "metadata": {
+      "source": "LabEx — tr command (https://labex.io/lesson/tr-translate-command)"
+    }
+  },
+  {
+    "id": "sh-075-clean-in-stages",
+    "title": "Clean up in two stages",
+    "description": "messy.txt has stray punctuation and uneven spacing. Print its content with all punctuation removed and every resulting run of spaces reduced to a single space, keeping the line breaks, and nothing else. Example: the line Hello,,,     world!!! -> Hello world. Punctuation next to spaces leaves longer runs once it is gone, so the order of the two steps matters.",
+    "objective": "Practise chaining character-level clean-up steps.",
+    "difficulty": 6,
+    "topic": "pipes",
+    "setup": "printf 'Hello,,,     world!!!\\nBye ...  for   now?\\n' > messy.txt\n",
+    "check": "expected=$(printf 'Hello world\\nBye for now')\nif [ \"$(cat \"$CMM_STDOUT\")\" != \"$expected\" ]; then\n  echo \"Expected no punctuation and single spaces between words:\"\n  echo \"$expected\"\n  echo \"Got:\"\n  cat \"$CMM_STDOUT\"\n  exit 1\nfi\n",
+    "solution": "tr -d '[:punct:]' < messy.txt | tr -s ' '\n",
+    "language": "shell",
+    "metadata": {
+      "source": "LabEx — tr command (https://labex.io/lesson/tr-translate-command)"
+    }
+  }
+]

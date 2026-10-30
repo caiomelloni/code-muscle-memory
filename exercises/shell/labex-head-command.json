@@ -1,0 +1,47 @@
+[
+  {
+    "id": "sh-057-first-lines",
+    "title": "Just the start of the file",
+    "description": "events.log is long and only its beginning matters. Print its first five lines, in the order they appear in the file, and nothing else. Example: a file with the lines one, two, three, four, five, six -> one, two, three, four, five, one per line.",
+    "objective": "Practise the command that prints the start of a file, and choosing how many lines it prints.",
+    "difficulty": 2,
+    "topic": "text",
+    "setup": "for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14; do\n  printf 'event %s\\n' \"$i\"\ndone > events.log\n",
+    "check": "expected=$(printf 'event 1\\nevent 2\\nevent 3\\nevent 4\\nevent 5')\nif [ \"$(cat \"$CMM_STDOUT\")\" != \"$expected\" ]; then\n  echo \"Expected the first five lines of the file, in file order:\"\n  echo \"$expected\"\n  echo \"Got:\"\n  cat \"$CMM_STDOUT\"\n  exit 1\nfi\n",
+    "solution": "head -n 5 events.log\n",
+    "language": "shell",
+    "metadata": {
+      "source": "LabEx — head command (https://labex.io/lesson/head-command)"
+    }
+  },
+  {
+    "id": "sh-058-first-bytes",
+    "title": "Peek at the first bytes",
+    "description": "payload.dat begins with an eight-byte signature, followed by the rest of the record on the same line. Print exactly the first eight bytes of the file and nothing else: no line ending after them, since the file has none at that point. Example: a file starting with ABCDEFGHIJ -> ABCDEFGH. The count has to be measured in bytes rather than lines, which the command does not do by default.",
+    "objective": "Practise taking the start of a file by byte count instead of line count.",
+    "difficulty": 3,
+    "topic": "text",
+    "setup": "printf 'CMMDATA1-first-record\\nCMMDATA2-second-record\\n' > payload.dat\n",
+    "check": "if ! printf 'CMMDATA1' | cmp -s - \"$CMM_STDOUT\"; then\n  echo \"Expected exactly the eight bytes CMMDATA1, with no line ending. Got:\"\n  cat -et \"$CMM_STDOUT\"\n  echo\n  echo \"(A line end shows as \\$ above.)\"\n  exit 1\nfi\n",
+    "solution": "head -c 8 payload.dat\n",
+    "language": "shell",
+    "metadata": {
+      "source": "LabEx — head command (https://labex.io/lesson/head-command)"
+    }
+  },
+  {
+    "id": "sh-059-preview-a-pipe",
+    "title": "Keep only the top of the output",
+    "description": "names.txt holds one name per line, in no particular order. Put the names in alphabetical order and print only the first three of that ordered list, one per line, and nothing else. Example: the lines dan, bob, eve, amy, cid -> amy, bob, cid. The limit has to apply to the ordered output, not to the file itself, so the first three lines of the file are not the answer.",
+    "objective": "Practise limiting another command's output to its first few lines.",
+    "difficulty": 4,
+    "topic": "pipes",
+    "setup": "printf 'mallory\\ncarol\\nzoe\\nalice\\nwalter\\nbob\\n' > names.txt\n",
+    "check": "expected=$(printf 'alice\\nbob\\ncarol')\nif [ \"$(cat \"$CMM_STDOUT\")\" != \"$expected\" ]; then\n  echo \"Expected the first three names in alphabetical order:\"\n  echo \"$expected\"\n  echo \"Got:\"\n  cat \"$CMM_STDOUT\"\n  exit 1\nfi\n",
+    "solution": "sort names.txt | head -n 3\n",
+    "language": "shell",
+    "metadata": {
+      "source": "LabEx — head command (https://labex.io/lesson/head-command)"
+    }
+  }
+]
