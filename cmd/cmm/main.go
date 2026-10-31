@@ -41,6 +41,16 @@ func run() error {
 		return err
 	}
 
+	// Backing up must not depend on the settings or cards being loadable, so
+	// sync runs before either is read.
+	if fs.Arg(0) == "sync" {
+		if err := memory.Sync(memoryDir, "cmm sync"); err != nil {
+			return fmt.Errorf("sync: %w", err)
+		}
+		fmt.Fprintln(os.Stdout, "Memory repo committed and pushed.")
+		return nil
+	}
+
 	// Overriding a path means the data may not be in the memory repo, so
 	// nothing is committed for that run.
 	pathOverridden := false
@@ -249,6 +259,13 @@ Pass -lang to work in the other deck for one run without changing the default:
   cmm deck shell     make shell the default from now on
   cmm next           serves a shell exercise
   cmm -lang go next  serves a Go exercise, just this once`)
+	case "sync":
+		fmt.Fprintln(w, `Usage:
+  cmm sync
+
+Commit any pending changes in the memory repo ($HOME/.code-muscle-memory) and push them to its
+remote, so cards and progress are backed up off this machine. A commit that succeeds is kept even
+if the push fails. A rejected push is reported and never forced.`)
 	case "help":
 		fmt.Fprintln(w, `Usage:
   cmm help [command]
@@ -277,6 +294,7 @@ Commands:
   reset [id]       discard a saved attempt (defaults to the current exercise)
   validate         run authoring checks on every exercise
   deck [name]      show the default deck, or make one the default
+  sync             commit and push the memory repo
   help             show this help
 
 Decks:

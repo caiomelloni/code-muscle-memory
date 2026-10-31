@@ -42,6 +42,17 @@ func Commit(dir, message string) error {
 	return err
 }
 
+// Sync commits any pending change in dir and pushes it to the configured
+// upstream. It never forces a push, so a remote with other work is left intact
+// and the error is returned instead.
+func Sync(dir, message string) error {
+	if err := Commit(dir, message); err != nil {
+		return err
+	}
+	_, err := git(dir, "push", "-q")
+	return err
+}
+
 func samePath(a, b string) (bool, error) {
 	a, err := filepath.EvalSymlinks(a)
 	if err != nil {

@@ -110,3 +110,108 @@ func TestCommitRefusesDirectoryNestedInRepo(t *testing.T) {
 		t.Fatalf("parent has staged files: %q", staged)
 	}
 }
+
+// initRepoWithRemote returns a repository whose main branch tracks a new bare
+// remote, along with that remote's path.
+func initRepoWithRemote(t *testing.T) (dir, remote string) {
+	t.Helper()
+	dir, remote = t.TempDir(), t.TempDir()
+	initRepo(t, dir)
+	if _, err := git(remote, "init", "-q", "--bare", "-b", "main"); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(dir, "progress.json"), "{}")
+	if err := Commit(dir, "first"); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{
+		{"branch", "-M", "main"},
+		{"remote", "add", "origin", remote},
+		{"push", "-q", "-u", "origin", "main"},
+	} {
+		if _, err := git(dir, args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return dir, remote
+}
+
+func TestSyncCommitsAndPushes(t *testing.T) {
+	dir, remote := initRepoWithRemote(t)
+	writeFile(t, filepath.Join(dir, "progress.json"), `{"a":1}`)
+
+	if err := Sync(dir, "cmm sync"); err != nil {
+		t.Fatal(err)
+	}
+
+	subject, err := git(remote, "log", "-1", "--format=%s", "main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if subject != "cmm sync" {
+		t.Fatalf("remote subject = %q", subject)
+	}
+}
+
+func TestSyncPushesEarlierCommitsWithNoPendingChange(t *testing.T) {
+	dir, remote := initRepoWithRemote(t)
+	writeFile(t, filepath.Join(dir, "progress.json"), `{"a":1}`)
+	if err := Commit(dir, "cmm next"); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Sync(dir, "cmm sync"); err != nil {
+		t.Fatal(err)
+	}
+
+	subject, err := git(remote, "log", "-1", "--format=%s", "main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if subject != "cmm next" {
+		t.Fatalf("remote subject = %q", subject)
+	}
+}
+
+func TestSyncKeepsCommitWhenPushFails(t *testing.T) {
+	dir := t.TempDir()
+	initRepo(t, dir)
+	writeFile(t, filepath.Join(dir, "progress.json"), "{}")
+
+	if err := Sync(dir, "cmm sync"); err == nil {
+		t.Fatal("Sync succeeded without a remote")
+	}
+
+	if got := commitCount(t, dir); got != "1" {
+		t.Fatalf("commits = %s, want 1", got)
+	}
+}
+
+func TestSyncDoesNotForceOverDivergedRemote(t *testing.T) {
+	dir, remote := initRepoWithRemote(t)
+
+	other := t.TempDir()
+	if _, err := git(other, "clone", "-q", remote, "."); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(other, "other.txt"), "x")
+	if err := Commit(other, "from another machine"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := git(other, "push", "-q"); err != nil {
+		t.Fatal(err)
+	}
+
+	writeFile(t, filepath.Join(dir, "progress.json"), `{"a":1}`)
+	if err := Sync(dir, "cmm sync"); err == nil {
+		t.Fatal("Sync succeeded against a diverged remote")
+	}
+
+	subject, err := git(remote, "log", "-1", "--format=%s", "main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if subject != "from another machine" {
+		t.Fatalf("remote was overwritten: subject = %q", subject)
+	}
+}

@@ -179,10 +179,10 @@ Your cards, progress and settings all live in one git repository, separate from 
   config.json               settings, currently just the default deck
 ```
 
-`cmm` commits there after `next`, `delete`, `reset` and `deck`, and after a passing `validate`. A commit that fails prints a warning and never gets in the way of practice; the change goes in with the next commit. `cmm` does not push, so back up off the machine yourself:
+`cmm` commits there after `next`, `delete`, `reset` and `deck`, and after a passing `validate`. A commit that fails prints a warning and never gets in the way of practice; the change goes in with the next commit. Those commits stay local. To back up off the machine, commit anything pending and push:
 
 ```sh
-git -C ~/.code-muscle-memory push
+cmm sync
 ```
 
 Keep the repo private, since progress includes your draft attempts. To restore on a new machine, clone it to the same path:
