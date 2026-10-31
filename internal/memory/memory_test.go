@@ -215,3 +215,84 @@ func TestSyncDoesNotForceOverDivergedRemote(t *testing.T) {
 		t.Fatalf("remote was overwritten: subject = %q", subject)
 	}
 }
+
+func TestCheckStatus(t *testing.T) {
+	dir, remote := initRepoWithRemote(t)
+
+	check := func(want Status, wantText string) {
+		t.Helper()
+		got, err := CheckStatus(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got != want {
+			t.Fatalf("status = %+v, want %+v", got, want)
+		}
+		if got.String() != wantText {
+			t.Fatalf("text = %q, want %q", got.String(), wantText)
+		}
+	}
+
+	check(Status{HasUpstream: true}, "up to date")
+
+	writeFile(t, filepath.Join(dir, "progress.json"), `{"a":1}`)
+	check(Status{HasUpstream: true, Uncommitted: true}, `uncommitted changes (run "cmm sync")`)
+
+	if err := Commit(dir, "cmm next"); err != nil {
+		t.Fatal(err)
+	}
+	check(Status{HasUpstream: true, Ahead: 1}, `1 commit to push (run "cmm sync")`)
+
+	writeFile(t, filepath.Join(dir, "progress.json"), `{"a":2}`)
+	if err := Commit(dir, "cmm next"); err != nil {
+		t.Fatal(err)
+	}
+	check(Status{HasUpstream: true, Ahead: 2}, `2 commits to push (run "cmm sync")`)
+
+	if err := Sync(dir, "cmm sync"); err != nil {
+		t.Fatal(err)
+	}
+	check(Status{HasUpstream: true}, "up to date")
+
+	other := t.TempDir()
+	if _, err := git(other, "clone", "-q", remote, "."); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(other, "other.txt"), "x")
+	if err := Commit(other, "from another machine"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := git(other, "push", "-q"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := git(dir, "fetch", "-q"); err != nil {
+		t.Fatal(err)
+	}
+	check(Status{HasUpstream: true, Behind: 1}, `1 commit behind the remote (pull in the memory repo before "cmm sync")`)
+}
+
+func TestCheckStatusWithoutUpstream(t *testing.T) {
+	dir := t.TempDir()
+	initRepo(t, dir)
+	writeFile(t, filepath.Join(dir, "progress.json"), "{}")
+	if err := Commit(dir, "first"); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := CheckStatus(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.HasUpstream {
+		t.Fatalf("status = %+v", got)
+	}
+	if got.String() != "no remote branch set up" {
+		t.Fatalf("text = %q", got.String())
+	}
+}
+
+func TestCheckStatusOutsideRepoFails(t *testing.T) {
+	if _, err := CheckStatus(t.TempDir()); err == nil {
+		t.Fatal("CheckStatus succeeded outside a git repository")
+	}
+}

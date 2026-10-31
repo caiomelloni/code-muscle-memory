@@ -95,7 +95,21 @@ func run() error {
 			fmt.Fprintln(os.Stderr, "warning: progress is saved but was not committed to the memory repo:", err)
 		}
 	}
+	if command == "stats" && runErr == nil && !pathOverridden {
+		printSyncStatus(os.Stdout, memoryDir)
+	}
 	return runErr
+}
+
+// printSyncStatus never fails the command: the stats were already printed, and
+// a problem with the repo is what this line exists to show.
+func printSyncStatus(w io.Writer, memoryDir string) {
+	status, err := memory.CheckStatus(memoryDir)
+	if err != nil {
+		fmt.Fprintln(w, "Sync: unknown:", err)
+		return
+	}
+	fmt.Fprintln(w, "Sync:", status)
 }
 
 func defaultExerciseDir(memoryDir, language string) string {
@@ -199,7 +213,9 @@ List all loaded exercises with their review status, difficulty, and topic.`)
   cmm stats
 
 Print a summary of exercises by review state: new, in learning, and due now, followed by the
-id of the exercise "cmm next" would serve and its review status.`)
+id of the exercise "cmm next" would serve and its review status. The last line says whether the
+memory repo has anything to back up. It does not contact the remote, so it only knows about remote
+commits as of the last push or fetch.`)
 	case "describe":
 		fmt.Fprintln(w, `Usage:
   cmm describe <exercise-id>

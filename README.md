@@ -185,6 +185,8 @@ Your cards, progress and settings all live in one git repository, separate from 
 cmm sync
 ```
 
+`cmm stats` ends with a `Sync:` line saying whether anything is waiting to be backed up. It does not contact the remote, so it only knows about remote commits as of the last push or fetch.
+
 Keep the repo private, since progress includes your draft attempts. To restore on a new machine, clone it to the same path:
 
 ```sh
