@@ -16,7 +16,7 @@
 - The editable solution file may include high-level comments and `package exercise`.
 - Instructions must not reveal programming language syntax the user should recall.
 - Hidden tests define the required API and correctness.
-- Exercise files are JSON under `exercises/<language>`.
+- Exercise files are JSON under `~/.code-muscle-memory/exercises/<language>`, in the user's memory repo alongside progress, not in this code repo.
 - Decks are practised separately and share one progress file. The deck in use comes from the saved default (`cmm deck <name>`), which `-lang` overrides for a single run. Each deck keeps its own in-progress exercise, so switching decks does not disturb a half-answered card in the other.
 - Shell exercises are graded by running the user's command line in a throwaway sandbox directory seeded by the exercise's `setup`, then handing the result to its hidden `check` script. The command's own exit status decides nothing; the check does.
 - Adding a language means adding an executor behind `executor.Executor` and, if its exercises start from a prepared environment, `executor.Previewer`. Nothing else should need to know the language.

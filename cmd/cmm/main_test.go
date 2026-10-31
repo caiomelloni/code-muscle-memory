@@ -2,9 +2,47 @@ package main
 
 import (
 	"bytes"
+	"errors"
+	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func TestDefaultExerciseDirIsAbsoluteInMemoryDir(t *testing.T) {
+	memoryDir := filepath.Join(t.TempDir(), ".code-muscle-memory")
+	got := defaultExerciseDir(memoryDir, "shell")
+	if want := filepath.Join(memoryDir, "exercises", "shell"); got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+	if !filepath.IsAbs(got) {
+		t.Fatalf("%q depends on the current directory", got)
+	}
+}
+
+func TestCommitsMemory(t *testing.T) {
+	failed := errors.New("failed")
+	tests := []struct {
+		command string
+		err     error
+		want    bool
+	}{
+		{"next", nil, true},
+		{"next", failed, true},
+		{"delete", nil, true},
+		{"reset", nil, true},
+		{"deck", nil, true},
+		{"validate", nil, true},
+		{"validate", failed, false},
+		{"try", nil, false},
+		{"list", nil, false},
+		{"stats", nil, false},
+	}
+	for _, tt := range tests {
+		if got := commitsMemory(tt.command, tt.err); got != tt.want {
+			t.Errorf("commitsMemory(%q, %v) = %v, want %v", tt.command, tt.err, got, tt.want)
+		}
+	}
+}
 
 func TestPrintHelpGeneral(t *testing.T) {
 	var out bytes.Buffer

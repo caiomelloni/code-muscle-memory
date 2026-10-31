@@ -168,17 +168,30 @@ you left half answered. They share one progress file, so review history survives
 
 `validate` runs authoring checks on every exercise in the deck: each implementation exercise's solution must pass its hidden tests and its starter code must not, each test-writing exercise's subject and mutants must compile, and each shell exercise's setup must run, its solution must satisfy its check, and a command that does nothing must not. Run it after adding or revising exercises.
 
-By default, progress is saved to:
+### Memory repo
+
+Your cards, progress and settings all live in one git repository, separate from this code, so `cmm` works from any directory:
 
 ```text
-~/.code-muscle-memory/progress.json
+~/.code-muscle-memory/
+  exercises/<deck>/*.json   the cards
+  progress.json             review history and saved attempts
+  config.json               settings, currently just the default deck
 ```
 
-and settings, currently just the default deck, to:
+`cmm` commits there after `next`, `delete`, `reset` and `deck`, and after a passing `validate`. A commit that fails prints a warning and never gets in the way of practice; the change goes in with the next commit. `cmm` does not push, so back up off the machine yourself:
 
-```text
-~/.code-muscle-memory/config.json
+```sh
+git -C ~/.code-muscle-memory push
 ```
+
+Keep the repo private, since progress includes your draft attempts. To restore on a new machine, clone it to the same path:
+
+```sh
+git clone <your-memory-repo-url> ~/.code-muscle-memory
+```
+
+Cards are not included in this code repo. Without a memory repo, create `~/.code-muscle-memory/exercises/<deck>/` and add cards following the authoring guide, then run `git init` there to turn on version history.
 
 Settings are kept apart from progress on purpose: a choice you made deliberately should
 survive throwing your progress away.
@@ -186,10 +199,10 @@ survive throwing your progress away.
 You can override paths:
 
 ```sh
-./cmm -exercises exercises/go -progress /tmp/cmm-progress.json next
+./cmm -exercises /tmp/cards/go -progress /tmp/cmm-progress.json next
 ```
 
-`-exercises` defaults to `exercises/<lang>`, and `-config` overrides the settings file.
+`-exercises` defaults to `~/.code-muscle-memory/exercises/<lang>`, and `-config` overrides the settings file. Overriding any of these three paths turns off the automatic commit for that run.
 
 ## Exercise Philosophy
 
@@ -238,8 +251,7 @@ internal/executor    grading: Go test runs and sandboxed shell runs
 internal/scheduler   spaced repetition logic
 internal/config      local settings persistence
 internal/storage     local progress persistence
-exercises/go         seed Go exercise pack
-exercises/shell      seed Linux command line exercise pack
+internal/memory      commits to the memory repo
 ```
 
 ## Roadmap

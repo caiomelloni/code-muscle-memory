@@ -11,8 +11,8 @@ First settle which deck the page belongs to, since it decides the directory, the
 
 | Deck | Page teaches | Directory | Ids | Cards ask for |
 | --- | --- | --- | --- | --- |
-| `go` | Go | `exercises/go/` | `go-NNN-slug` | Go code, or a Go test |
-| `shell` | the Linux command line | `exercises/shell/` | `sh-NNN-slug` | a command line |
+| `go` | Go | `~/.code-muscle-memory/exercises/go/` | `go-NNN-slug` | Go code, or a Go test |
+| `shell` | the Linux command line | `~/.code-muscle-memory/exercises/shell/` | `sh-NNN-slug` | a command line |
 
 Pick it from the page's subject and say which you picked; ask only if the page genuinely straddles both.
 
@@ -48,7 +48,7 @@ End by inviting edits: the user can change, drop, or add cards, adjust difficult
 
 Read `EXERCISE_AUTHORING_GUIDE.md` in full before writing any card. Its rules are binding: the instruction rules (no syntax or command names in descriptions, generic pseudocode examples, concrete input -> output pairs), the mutant rules for `test_writing` cards (single fault, must compile, no shared blind spot, plain-English hints), and the "Authoring Shell Exercises" section for `shell` cards (deterministic `setup`, a `check` that explains itself and accepts every reasonable answer, `required_commands` only when the tool is the point).
 
-- Write all cards as one JSON array to a new file `exercises/<deck>/<page-slug>.json` (the loader picks up every `.json` in the directory; never edit `seed.json` for this).
+- Write all cards as one JSON array to a new file `~/.code-muscle-memory/exercises/<deck>/<page-slug>.json` (the loader picks up every `.json` in the directory; never edit `seed.json` for this).
 - Every card except `test_writing` must include a `solution` — `cmm validate` requires it.
 - Set `metadata.source` to the page title and URL.
 
@@ -59,7 +59,7 @@ go run ./cmd/cmm validate              # go deck
 go run ./cmd/cmm -lang shell validate  # shell deck
 ```
 
-Validation is per-deck, so run the one you added to. It covers schema validation (required fields, unique ids, mutant/hint counts) plus authoring checks: solutions pass their hidden tests, starter code does not, test-writing subjects and mutants compile, and shell setups run while their checks reject a do-nothing command. Fix and rerun until everything passes.
+Validation is per-deck, so run the one you added to. It covers schema validation (required fields, unique ids, mutant/hint counts) plus authoring checks: solutions pass their hidden tests, starter code does not, test-writing subjects and mutants compile, and shell setups run while their checks reject a do-nothing command. Fix and rerun until everything passes. A passing run commits the new cards to the memory repo.
 
 Two things it cannot check, so re-check them yourself against the guide: the blind-spot rule for mutants, and whether a shell check accepts reasonable answers other than the one in `solution`.
 

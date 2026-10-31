@@ -52,7 +52,7 @@ This is the one real gate. A module whose Chapter-done box is empty must never g
 2. Ask what they actually struggled with while studying, and let that shape the two cards. The specs
    in `curriculum.md` are the plan, not a straitjacket — a card that targets a real gap beats one
    that targets the plan.
-3. Write both cards as a JSON array to the module's file, `exercises/go/<file from curriculum.md>`.
+3. Write both cards as a JSON array to the module's file, `~/.code-muscle-memory/exercises/go/<file from curriculum.md>`.
    Never edit `seed.json`. Never write more than two cards for a module.
 4. Verify with `go run ./cmd/cmm validate`, then hand-check the two things it cannot: the mutant
    blind-spot rule, and that no identifier the card is drilling is spelled out in its prose (see

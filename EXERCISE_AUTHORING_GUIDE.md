@@ -2,8 +2,8 @@
 
 Use this guide when adding or revising exercises.
 
-There are two decks. Cards for the Go deck live in `exercises/go` with `"language": "go"`;
-cards for the Linux command line deck live in `exercises/shell` with `"language": "shell"`.
+There are two decks. Cards for the Go deck live in `~/.code-muscle-memory/exercises/go` with `"language": "go"`;
+cards for the Linux command line deck live in `~/.code-muscle-memory/exercises/shell` with `"language": "shell"`.
 Everything down to "Authoring Shell Exercises" is about the Go deck, except the JSON notes at
 the end, which apply to both.
 
@@ -88,7 +88,7 @@ Most exercises have the user write the implementation against a hidden test. A t
 ## Authoring Shell Exercises
 
 A shell exercise asks for a command line instead of code. Set `"language": "shell"`, use ids
-of the form `sh-NNN-slug`, and put the card in `exercises/shell`. These cards have their own
+of the form `sh-NNN-slug`, and put the card in `~/.code-muscle-memory/exercises/shell`. These cards have their own
 fields; the Go ones (`starter_code`, `tests`, `subject_code`, `mutants`, `required_test_features`)
 are rejected.
 

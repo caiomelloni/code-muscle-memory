@@ -11,6 +11,7 @@ import (
 
 	"code-muscle-memory/internal/app"
 	"code-muscle-memory/internal/exercise"
+	"code-muscle-memory/internal/memory"
 )
 
 func main() {
@@ -32,12 +33,22 @@ func run() error {
 		printUsage(os.Stdout)
 	}
 	language := fs.String("lang", "", "deck to practise for this run, overriding the default deck")
-	exerciseDir := fs.String("exercises", "", "directory containing exercise JSON files (default \"exercises/<lang>\")")
-	progressPath := fs.String("progress", filepath.Join(home, ".code-muscle-memory", "progress.json"), "progress JSON file")
-	configPath := fs.String("config", filepath.Join(home, ".code-muscle-memory", "config.json"), "settings JSON file")
+	memoryDir := filepath.Join(home, ".code-muscle-memory")
+	exerciseDir := fs.String("exercises", "", "directory containing exercise JSON files (default \"$HOME/.code-muscle-memory/exercises/<lang>\")")
+	progressPath := fs.String("progress", filepath.Join(memoryDir, "progress.json"), "progress JSON file")
+	configPath := fs.String("config", filepath.Join(memoryDir, "config.json"), "settings JSON file")
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		return err
 	}
+
+	// Overriding a path means the data may not be in the memory repo, so
+	// nothing is committed for that run.
+	pathOverridden := false
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == "exercises" || f.Name == "progress" || f.Name == "config" {
+			pathOverridden = true
+		}
+	})
 
 	// An explicit -lang wins for this run only; otherwise the deck the user
 	// settled on with "cmm deck" is used, so it needs saying just once.
@@ -49,7 +60,7 @@ func run() error {
 		return fmt.Errorf("unknown deck %q: use %s", *language, strings.Join(exercise.Languages(), " or "))
 	}
 	if *exerciseDir == "" {
-		*exerciseDir = filepath.Join("exercises", *language)
+		*exerciseDir = defaultExerciseDir(memoryDir, *language)
 	}
 
 	command := "next"
@@ -57,7 +68,7 @@ func run() error {
 		command = fs.Arg(0)
 	}
 
-	a := app.New(app.Config{
+	runErr := dispatch(fs, command, app.Config{
 		ExerciseDir:  *exerciseDir,
 		ProgressPath: *progressPath,
 		ConfigPath:   *configPath,
@@ -65,6 +76,37 @@ func run() error {
 		Stdout:       os.Stdout,
 		Stderr:       os.Stderr,
 	})
+
+	// A command that returns an error may still have saved something, such as
+	// a failed attempt, so the commit does not depend on runErr. Only validate
+	// waits for success, so cards that fail their checks are not committed.
+	if !pathOverridden && commitsMemory(command, runErr) {
+		if err := memory.Commit(memoryDir, "cmm "+command); err != nil {
+			fmt.Fprintln(os.Stderr, "warning: progress is saved but was not committed to the memory repo:", err)
+		}
+	}
+	return runErr
+}
+
+func defaultExerciseDir(memoryDir, language string) string {
+	return filepath.Join(memoryDir, "exercises", language)
+}
+
+// commitsMemory reports whether a command's outcome should be recorded in the
+// memory repo. The commands left out never change anything on disk.
+func commitsMemory(command string, runErr error) bool {
+	switch command {
+	case "next", "delete", "reset", "deck":
+		return true
+	case "validate":
+		return runErr == nil
+	}
+	return false
+}
+
+func dispatch(fs *flag.FlagSet, command string, cfg app.Config) error {
+
+	a := app.New(cfg)
 
 	ctx := context.Background()
 	switch command {
@@ -248,7 +290,7 @@ and its own in-progress exercise.
 
 Flags:
   -lang string        deck to use for this run (default: the deck set by "cmm deck")
-  -exercises string   directory containing exercise JSON files (default "exercises/<lang>")
+  -exercises string   directory containing exercise JSON files (default "$HOME/.code-muscle-memory/exercises/<lang>")
   -progress string    progress JSON file (default "$HOME/.code-muscle-memory/progress.json")
   -config string      settings JSON file (default "$HOME/.code-muscle-memory/config.json")`)
 }
