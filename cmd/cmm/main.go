@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bufio"
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -44,15 +46,16 @@ func run() error {
 	// Backing up must not depend on the settings or cards being loadable, so
 	// sync runs before either is read.
 	if fs.Arg(0) == "sync" {
-		if err := memory.Sync(memoryDir, "cmm sync"); err != nil {
+		ask := func() (string, error) { return askCommitMessage(os.Stdin, os.Stdout) }
+		if err := memory.Sync(memoryDir, ask); err != nil {
 			return fmt.Errorf("sync: %w", err)
 		}
-		fmt.Fprintln(os.Stdout, "Memory repo committed and pushed.")
+		fmt.Fprintln(os.Stdout, "Memory repo pushed.")
 		return nil
 	}
 
-	// Overriding a path means the data may not be in the memory repo, so
-	// nothing is committed for that run.
+	// Overriding a path means the stats may not describe the memory repo, so
+	// its sync status is left out for that run.
 	pathOverridden := false
 	fs.Visit(func(f *flag.Flag) {
 		if f.Name == "exercises" || f.Name == "progress" || f.Name == "config" {
@@ -87,14 +90,6 @@ func run() error {
 		Stderr:       os.Stderr,
 	})
 
-	// A command that returns an error may still have saved something, such as
-	// a failed attempt, so the commit does not depend on runErr. Only validate
-	// waits for success, so cards that fail their checks are not committed.
-	if !pathOverridden && commitsMemory(command, runErr) {
-		if err := memory.Commit(memoryDir, "cmm "+command); err != nil {
-			fmt.Fprintln(os.Stderr, "warning: progress is saved but was not committed to the memory repo:", err)
-		}
-	}
 	if command == "stats" && runErr == nil && !pathOverridden {
 		printSyncStatus(os.Stdout, memoryDir)
 	}
@@ -116,16 +111,15 @@ func defaultExerciseDir(memoryDir, language string) string {
 	return filepath.Join(memoryDir, "exercises", language)
 }
 
-// commitsMemory reports whether a command's outcome should be recorded in the
-// memory repo. The commands left out never change anything on disk.
-func commitsMemory(command string, runErr error) bool {
-	switch command {
-	case "next", "delete", "reset", "deck":
-		return true
-	case "validate":
-		return runErr == nil
+// askCommitMessage prompts for one line. Input that ends without a newline
+// still counts, so only an empty answer means no message.
+func askCommitMessage(r io.Reader, w io.Writer) (string, error) {
+	fmt.Fprint(w, "Commit message: ")
+	line, err := bufio.NewReader(r).ReadString('\n')
+	if err != nil && !errors.Is(err, io.EOF) {
+		return "", err
 	}
-	return false
+	return strings.TrimSpace(line), nil
 }
 
 func dispatch(fs *flag.FlagSet, command string, cfg app.Config) error {
@@ -280,8 +274,11 @@ Pass -lang to work in the other deck for one run without changing the default:
   cmm sync
 
 Commit any pending changes in the memory repo ($HOME/.code-muscle-memory) and push them to its
-remote, so cards and progress are backed up off this machine. A commit that succeeds is kept even
-if the push fails. A rejected push is reported and never forced.`)
+remote, so cards and progress are backed up off this machine. This is the only command that commits.
+
+If there are changes, you are asked for the commit message; an empty answer cancels, leaving
+everything as it was. With no changes, nothing is asked and any earlier commits are pushed. A commit
+that succeeds is kept even if the push fails. A rejected push is reported and never forced.`)
 	case "help":
 		fmt.Fprintln(w, `Usage:
   cmm help [command]

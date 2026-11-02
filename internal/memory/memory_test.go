@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -136,11 +137,38 @@ func initRepoWithRemote(t *testing.T) (dir, remote string) {
 	return dir, remote
 }
 
+func answer(message string) func() (string, error) {
+	return func() (string, error) { return message, nil }
+}
+
+func TestSyncWithEmptyMessageChangesNothing(t *testing.T) {
+	dir, remote := initRepoWithRemote(t)
+	writeFile(t, filepath.Join(dir, "progress.json"), `{"a":1}`)
+
+	if err := Sync(dir, answer("")); !errors.Is(err, ErrNoMessage) {
+		t.Fatalf("err = %v, want ErrNoMessage", err)
+	}
+
+	if got := commitCount(t, dir); got != "1" {
+		t.Fatalf("local commits = %s, want 1", got)
+	}
+	if got := commitCount(t, remote); got != "1" {
+		t.Fatalf("remote commits = %s, want 1", got)
+	}
+	changes, err := git(dir, "status", "--porcelain")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if changes == "" {
+		t.Fatal("pending change was lost")
+	}
+}
+
 func TestSyncCommitsAndPushes(t *testing.T) {
 	dir, remote := initRepoWithRemote(t)
 	writeFile(t, filepath.Join(dir, "progress.json"), `{"a":1}`)
 
-	if err := Sync(dir, "cmm sync"); err != nil {
+	if err := Sync(dir, answer("my message")); err != nil {
 		t.Fatal(err)
 	}
 
@@ -148,7 +176,7 @@ func TestSyncCommitsAndPushes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if subject != "cmm sync" {
+	if subject != "my message" {
 		t.Fatalf("remote subject = %q", subject)
 	}
 }
@@ -160,7 +188,11 @@ func TestSyncPushesEarlierCommitsWithNoPendingChange(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := Sync(dir, "cmm sync"); err != nil {
+	ask := func() (string, error) {
+		t.Fatal("asked for a message with nothing to commit")
+		return "", nil
+	}
+	if err := Sync(dir, ask); err != nil {
 		t.Fatal(err)
 	}
 
@@ -178,7 +210,7 @@ func TestSyncKeepsCommitWhenPushFails(t *testing.T) {
 	initRepo(t, dir)
 	writeFile(t, filepath.Join(dir, "progress.json"), "{}")
 
-	if err := Sync(dir, "cmm sync"); err == nil {
+	if err := Sync(dir, answer("my message")); err == nil {
 		t.Fatal("Sync succeeded without a remote")
 	}
 
@@ -203,7 +235,7 @@ func TestSyncDoesNotForceOverDivergedRemote(t *testing.T) {
 	}
 
 	writeFile(t, filepath.Join(dir, "progress.json"), `{"a":1}`)
-	if err := Sync(dir, "cmm sync"); err == nil {
+	if err := Sync(dir, answer("my message")); err == nil {
 		t.Fatal("Sync succeeded against a diverged remote")
 	}
 
@@ -249,7 +281,7 @@ func TestCheckStatus(t *testing.T) {
 	}
 	check(Status{HasUpstream: true, Ahead: 2}, `2 commits to push (run "cmm sync")`)
 
-	if err := Sync(dir, "cmm sync"); err != nil {
+	if err := Sync(dir, answer("my message")); err != nil {
 		t.Fatal(err)
 	}
 	check(Status{HasUpstream: true}, "up to date")

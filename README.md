@@ -179,11 +179,13 @@ Your cards, progress and settings all live in one git repository, separate from 
   config.json               settings, currently just the default deck
 ```
 
-`cmm` commits there after `next`, `delete`, `reset` and `deck`, and after a passing `validate`. A commit that fails prints a warning and never gets in the way of practice; the change goes in with the next commit. Those commits stay local. To back up off the machine, commit anything pending and push:
+`cmm` saves changes to those files as you go, but never commits on its own. To commit them and push to the remote, run:
 
 ```sh
 cmm sync
 ```
+
+It asks for the commit message; an empty answer cancels, leaving everything as it was. With nothing to commit, it just pushes any earlier commits. Until you sync, your changes are saved on disk but have no version history or off-machine copy.
 
 `cmm stats` ends with a `Sync:` line saying whether anything is waiting to be backed up. It does not contact the remote, so it only knows about remote commits as of the last push or fetch.
 
@@ -204,7 +206,7 @@ You can override paths:
 ./cmm -exercises /tmp/cards/go -progress /tmp/cmm-progress.json next
 ```
 
-`-exercises` defaults to `~/.code-muscle-memory/exercises/<lang>`, and `-config` overrides the settings file. Overriding any of these three paths turns off the automatic commit for that run.
+`-exercises` defaults to `~/.code-muscle-memory/exercises/<lang>`, and `-config` overrides the settings file.
 
 ## Exercise Philosophy
 
@@ -253,7 +255,7 @@ internal/executor    grading: Go test runs and sandboxed shell runs
 internal/scheduler   spaced repetition logic
 internal/config      local settings persistence
 internal/storage     local progress persistence
-internal/memory      commits to the memory repo
+internal/memory      commits and pushes the memory repo
 ```
 
 ## Roadmap

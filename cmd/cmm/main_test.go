@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -19,27 +18,24 @@ func TestDefaultExerciseDirIsAbsoluteInMemoryDir(t *testing.T) {
 	}
 }
 
-func TestCommitsMemory(t *testing.T) {
-	failed := errors.New("failed")
-	tests := []struct {
-		command string
-		err     error
-		want    bool
-	}{
-		{"next", nil, true},
-		{"next", failed, true},
-		{"delete", nil, true},
-		{"reset", nil, true},
-		{"deck", nil, true},
-		{"validate", nil, true},
-		{"validate", failed, false},
-		{"try", nil, false},
-		{"list", nil, false},
-		{"stats", nil, false},
+func TestAskCommitMessage(t *testing.T) {
+	tests := []struct{ input, want string }{
+		{"fixed the cards\n", "fixed the cards"},
+		{"  no newline  ", "no newline"},
+		{"\n", ""},
+		{"", ""},
 	}
 	for _, tt := range tests {
-		if got := commitsMemory(tt.command, tt.err); got != tt.want {
-			t.Errorf("commitsMemory(%q, %v) = %v, want %v", tt.command, tt.err, got, tt.want)
+		var out bytes.Buffer
+		got, err := askCommitMessage(strings.NewReader(tt.input), &out)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got != tt.want {
+			t.Errorf("askCommitMessage(%q) = %q, want %q", tt.input, got, tt.want)
+		}
+		if !strings.Contains(out.String(), "Commit message:") {
+			t.Errorf("no prompt shown: %q", out.String())
 		}
 	}
 }

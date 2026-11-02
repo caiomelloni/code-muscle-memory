@@ -34,14 +34,34 @@ func Commit(dir, message string) error {
 	return err
 }
 
+// ErrNoMessage is returned by Sync when the commit message comes back empty.
+var ErrNoMessage = errors.New("no commit message given, so nothing was committed or pushed")
+
 // Sync commits any pending change in dir and pushes it to the configured
-// upstream. It never forces a push, so a remote with other work is left intact
-// and the error is returned instead.
-func Sync(dir, message string) error {
-	if err := Commit(dir, message); err != nil {
+// upstream. askMessage supplies the commit message and is only called when
+// there is something to commit. Sync never forces a push, so a remote with
+// other work is left intact and the error is returned instead.
+func Sync(dir string, askMessage func() (string, error)) error {
+	if err := checkRoot(dir); err != nil {
 		return err
 	}
-	_, err := git(dir, "push", "-q")
+	changes, err := git(dir, "status", "--porcelain")
+	if err != nil {
+		return err
+	}
+	if changes != "" {
+		message, err := askMessage()
+		if err != nil {
+			return err
+		}
+		if message == "" {
+			return ErrNoMessage
+		}
+		if err := Commit(dir, message); err != nil {
+			return err
+		}
+	}
+	_, err = git(dir, "push", "-q")
 	return err
 }
 

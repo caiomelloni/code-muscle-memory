@@ -1,1 +1,7 @@
 cmm
+
+# don't ignore the skill to create new cards
+.claude/*
+!.claude/skills/
+.claude/skills/*
+!.claude/skills/plan-exercises

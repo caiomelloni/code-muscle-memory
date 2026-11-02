@@ -59,10 +59,10 @@ go run ./cmd/cmm validate              # go deck
 go run ./cmd/cmm -lang shell validate  # shell deck
 ```
 
-Validation is per-deck, so run the one you added to. It covers schema validation (required fields, unique ids, mutant/hint counts) plus authoring checks: solutions pass their hidden tests, starter code does not, test-writing subjects and mutants compile, and shell setups run while their checks reject a do-nothing command. Fix and rerun until everything passes. A passing run commits the new cards to the memory repo.
+Validation is per-deck, so run the one you added to. It covers schema validation (required fields, unique ids, mutant/hint counts) plus authoring checks: solutions pass their hidden tests, starter code does not, test-writing subjects and mutants compile, and shell setups run while their checks reject a do-nothing command. Fix and rerun until everything passes.
 
 Two things it cannot check, so re-check them yourself against the guide: the blind-spot rule for mutants, and whether a shell check accepts reasonable answers other than the one in `solution`.
 
 ## 6. Report
 
-Summarize the created cards (ids, topics, difficulties) and point the user at `./cmm describe <id>` and `./cmm try <id>` to preview them, with `-lang shell` when they belong to the shell deck.
+Summarize the created cards (ids, topics, difficulties) and remind them that `cmm sync` commits and backs up the new cards, and point the user at `./cmm describe <id>` and `./cmm try <id>` to preview them, with `-lang shell` when they belong to the shell deck.
