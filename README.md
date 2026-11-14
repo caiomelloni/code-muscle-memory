@@ -2,9 +2,9 @@
 
 A terminal app for practicing programming syntax through active recall and spaced repetition.
 
-Instead of reading another tutorial, `cmm` gives you one small coding challenge, opens your editor, runs hidden tests, and schedules the exercise for review based on how you did.
+Instead of reading another tutorial, `cmm` gives you one small challenge, opens your editor, grades it, and schedules the exercise for review based on how you did.
 
-The first version focuses on Go.
+There are two decks. The Go deck has you write Go from memory against hidden tests. The shell deck has you write Linux command lines against a seeded directory and a hidden check.
 
 ## Why
 
@@ -43,11 +43,33 @@ package exercise
 
 You write the code from memory. Then `cmm` runs hidden Go tests and reports whether the result was a compile error, test failure, or pass.
 
+The shell deck works the same way, with `./cmm -lang shell next`:
+
+```sh
+# Hunting for files anywhere below you
+#
+# What to do: Somewhere under the current directory there are files whose names end in
+# .log, at different depths. Print the path of every one of them, however deep it is buried.
+# Objective: Practise searching a whole directory tree for files by name pattern.
+#
+# Write: the command line that does this
+# Use: the find command
+#
+# The working directory contains:
+#     boot.log
+#     services/api/logs/api.log
+#     var/log/system.log
+```
+
+You write the command line. `cmm` runs it in a throwaway copy of that directory and hands the result to a hidden check, which decides whether it did what was asked. The command's own exit status does not decide anything — a `grep` that matches nothing reports failure and may still be the right answer.
+
 ## Features
 
 - Terminal-first workflow
+- Separate decks for Go and the Linux command line, with a remembered default
 - External editor support through `$EDITOR`
 - Hidden Go tests with `go test`
+- Sandboxed command lines graded by hidden check scripts
 - Local JSON progress file
 - SM-2-inspired spaced repetition scheduler
 - Exercise pack stored as version-control-friendly JSON
@@ -59,6 +81,7 @@ You write the code from memory. Then `cmm` runs hidden Go tests and reports whet
 
 - Go 1.22 or newer
 - A terminal editor configured through `$EDITOR`
+- `bash`, for the shell deck
 
 If `$EDITOR` is not set, `cmm next` falls back to `vi`.
 
@@ -116,20 +139,74 @@ cmm help
 ./cmm list
 ./cmm stats
 ./cmm describe <exercise-id>
+./cmm try <exercise-id>
+./cmm validate
 ./cmm help
 ```
 
-By default, progress is saved to:
+Pick the deck you are working through once, and every later command uses it:
+
+```sh
+./cmm deck shell   # remembered from now on
+./cmm next         # serves a shell exercise
+./cmm list
+./cmm describe sh-009-find-by-name
+```
+
+`./cmm deck` with no name prints the current default and the decks available. To work in the
+other deck for a single run without changing the default, pass `-lang`:
+
+```sh
+./cmm -lang go next
+```
+
+The decks are practised separately: each serves only its own exercises and keeps its own
+in-progress card, so switching to the shell deck for an evening does not disturb a Go card
+you left half answered. They share one progress file, so review history survives switching.
+
+`try` opens a specific exercise for practice without affecting spaced repetition progress: nothing is scheduled, rated, or saved. Useful for previewing an exercise or re-drilling one outside the review queue.
+
+`validate` runs authoring checks on every exercise in the deck: each implementation exercise's solution must pass its hidden tests and its starter code must not, each test-writing exercise's subject and mutants must compile, and each shell exercise's setup must run, its solution must satisfy its check, and a command that does nothing must not. Run it after adding or revising exercises.
+
+### Memory repo
+
+Your cards, progress and settings all live in one git repository, separate from this code, so `cmm` works from any directory:
 
 ```text
-~/.code-muscle-memory/progress.json
+~/.code-muscle-memory/
+  exercises/<deck>/*.json   the cards
+  progress.json             review history and saved attempts
+  config.json               settings, currently just the default deck
 ```
+
+`cmm` saves changes to those files as you go, but never commits on its own. To commit them and push to the remote, run:
+
+```sh
+cmm sync
+```
+
+It asks for the commit message; an empty answer cancels, leaving everything as it was. With nothing to commit, it just pushes any earlier commits. Until you sync, your changes are saved on disk but have no version history or off-machine copy.
+
+`cmm stats` ends with a `Sync:` line saying whether anything is waiting to be backed up. It does not contact the remote, so it only knows about remote commits as of the last push or fetch.
+
+Keep the repo private, since progress includes your draft attempts. To restore on a new machine, clone it to the same path:
+
+```sh
+git clone <your-memory-repo-url> ~/.code-muscle-memory
+```
+
+Cards are not included in this code repo. Without a memory repo, create `~/.code-muscle-memory/exercises/<deck>/` and add cards following the authoring guide, then run `git init` there to turn on version history.
+
+Settings are kept apart from progress on purpose: a choice you made deliberately should
+survive throwing your progress away.
 
 You can override paths:
 
 ```sh
-./cmm -exercises exercises/go -progress /tmp/cmm-progress.json next
+./cmm -exercises /tmp/cards/go -progress /tmp/cmm-progress.json next
 ```
+
+`-exercises` defaults to `~/.code-muscle-memory/exercises/<lang>`, and `-config` overrides the settings file.
 
 ## Exercise Philosophy
 
@@ -145,6 +222,17 @@ They should not give Go syntax away:
 
 ```text
 func Add(a, b int) int
+```
+
+The same holds for the shell deck. An exercise says what has to end up true, not which
+command does it:
+
+```text
+Print how many lines access.log has. Print the number on its own.
+```
+
+```text
+Run wc -l < access.log
 ```
 
 See [EXERCISE_AUTHORING_GUIDE.md](EXERCISE_AUTHORING_GUIDE.md) for the authoring rules.
@@ -163,15 +251,17 @@ Project structure:
 cmd/cmm              CLI entrypoint
 internal/app         workflow orchestration
 internal/exercise    exercise loading and validation
-internal/executor    Go test execution
+internal/executor    grading: Go test runs and sandboxed shell runs
 internal/scheduler   spaced repetition logic
+internal/config      local settings persistence
 internal/storage     local progress persistence
-exercises/go         seed Go exercise pack
+internal/memory      commits and pushes the memory repo
 ```
 
 ## Roadmap
 
 - More Go exercises following Learn Go With Tests
+- More command line exercises: processes, archives, permissions, text processing
 - Better review controls after passing an exercise
 - Exercise pack validation command
 - Daily goal and review queue commands

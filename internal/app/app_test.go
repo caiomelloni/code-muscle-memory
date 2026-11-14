@@ -1,17 +1,20 @@
 package app
 
 import (
+	"context"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"code-muscle-memory/internal/executor"
 	"code-muscle-memory/internal/exercise"
 	"code-muscle-memory/internal/scheduler"
 	"code-muscle-memory/internal/storage"
 )
 
-func TestChooseNextPrefersNewExercises(t *testing.T) {
+func TestChooseNextPrefersDueReviewsOverNew(t *testing.T) {
 	now := time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC)
 	exercises := []exercise.Exercise{
 		{ID: "go-002", Difficulty: 2},
@@ -19,16 +22,361 @@ func TestChooseNextPrefersNewExercises(t *testing.T) {
 	}
 	progress := storage.ProgressFile{
 		Items: map[string]scheduler.Progress{
-			"go-001": {ExerciseID: "go-001", DueAt: now.Add(-time.Hour)},
+			"go-002": {ExerciseID: "go-002", State: scheduler.StateReview, IntervalDays: 3, DueAt: now.Add(-time.Hour)},
 		},
 	}
 
-	got, ok := chooseNext(exercises, progress, now)
+	got, ok := chooseNext(exercises, progress, "go", now)
 	if !ok {
 		t.Fatal("chooseNext returned false")
 	}
 	if got.ID != "go-002" {
-		t.Fatalf("chosen = %q, want go-002", got.ID)
+		t.Fatalf("chosen = %q, want the due review go-002 before the new go-001", got.ID)
+	}
+}
+
+func TestChooseNextPrefersDueLearningOverReviews(t *testing.T) {
+	now := time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC)
+	exercises := []exercise.Exercise{
+		{ID: "go-001", Difficulty: 1},
+		{ID: "go-002", Difficulty: 2},
+	}
+	progress := storage.ProgressFile{
+		Items: map[string]scheduler.Progress{
+			"go-001": {ExerciseID: "go-001", State: scheduler.StateReview, IntervalDays: 3, DueAt: now.Add(-2 * time.Hour)},
+			"go-002": {ExerciseID: "go-002", State: scheduler.StateLearning, DueAt: now.Add(-time.Minute)},
+		},
+	}
+
+	got, ok := chooseNext(exercises, progress, "go", now)
+	if !ok {
+		t.Fatal("chooseNext returned false")
+	}
+	if got.ID != "go-002" {
+		t.Fatalf("chosen = %q, want the due learning card go-002 before the due review go-001", got.ID)
+	}
+}
+
+func TestChooseNextOrdersNewExercisesByDifficulty(t *testing.T) {
+	now := time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC)
+	exercises := []exercise.Exercise{
+		{ID: "go-002", Difficulty: 2},
+		{ID: "go-001", Difficulty: 1},
+	}
+
+	got, ok := chooseNext(exercises, storage.ProgressFile{Items: map[string]scheduler.Progress{}}, "go", now)
+	if !ok {
+		t.Fatal("chooseNext returned false")
+	}
+	if got.ID != "go-001" {
+		t.Fatalf("chosen = %q, want the easiest new exercise go-001", got.ID)
+	}
+}
+
+func TestNextUpLine(t *testing.T) {
+	now := time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC)
+	exercises := []exercise.Exercise{
+		{ID: "go-001", Difficulty: 1},
+		{ID: "go-002", Difficulty: 2},
+	}
+
+	t.Run("names the due review over the new exercise", func(t *testing.T) {
+		progress := storage.ProgressFile{Items: map[string]scheduler.Progress{
+			"go-002": {ExerciseID: "go-002", State: scheduler.StateReview, IntervalDays: 3, DueAt: now.Add(-time.Hour)},
+		}}
+
+		if got, want := New(Config{}).nextUpLine(exercises, progress, now), "Next up: go-002 (due now)"; got != want {
+			t.Fatalf("nextUpLine() = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("names the easiest new exercise when nothing has been reviewed", func(t *testing.T) {
+		progress := storage.ProgressFile{Items: map[string]scheduler.Progress{}}
+
+		if got, want := New(Config{}).nextUpLine(exercises, progress, now), "Next up: go-001 (new)"; got != want {
+			t.Fatalf("nextUpLine() = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("names the earliest upcoming review when nothing is due", func(t *testing.T) {
+		progress := storage.ProgressFile{Items: map[string]scheduler.Progress{
+			"go-001": {ExerciseID: "go-001", State: scheduler.StateReview, IntervalDays: 9, DueAt: now.Add(9 * 24 * time.Hour)},
+			"go-002": {ExerciseID: "go-002", State: scheduler.StateReview, IntervalDays: 3, DueAt: now.Add(3 * 24 * time.Hour)},
+		}}
+
+		if got, want := New(Config{}).nextUpLine(exercises, progress, now), "Next up: go-002 (due 2026-07-04)"; got != want {
+			t.Fatalf("nextUpLine() = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("names the exercise already in progress", func(t *testing.T) {
+		progress := storage.ProgressFile{
+			CurrentExerciseID: "go-002",
+			Items:             map[string]scheduler.Progress{},
+		}
+
+		if got, want := New(Config{}).nextUpLine(exercises, progress, now), "Next up: go-002 (new)"; got != want {
+			t.Fatalf("nextUpLine() = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("reports none when there are no exercises", func(t *testing.T) {
+		if got, want := New(Config{}).nextUpLine(nil, storage.ProgressFile{}, now), "Next up: none"; got != want {
+			t.Fatalf("nextUpLine() = %q, want %q", got, want)
+		}
+	})
+}
+
+const deleteTestDeck = `[
+  {
+    "id": "go-001",
+    "title": "First",
+    "description": "d",
+    "objective": "o",
+    "difficulty": 1,
+    "language": "go",
+    "topic": "t",
+    "starter_code": "package exercise\n",
+    "tests": "package exercise\n"
+  },
+  {
+    "id": "go-002",
+    "title": "Second",
+    "description": "d",
+    "objective": "o",
+    "difficulty": 2,
+    "language": "go",
+    "topic": "t",
+    "starter_code": "package exercise\n",
+    "tests": "package exercise\n"
+  }
+]
+`
+
+// newDeleteTestApp builds an app over a throwaway deck and progress file, with
+// go-002 carrying every kind of stored state a delete has to clean up.
+func newDeleteTestApp(t *testing.T, answer string, out *strings.Builder) (App, string, string) {
+	t.Helper()
+	dir := t.TempDir()
+	exerciseDir := filepath.Join(dir, "exercises")
+	if err := os.MkdirAll(exerciseDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(exerciseDir, "deck.json"), []byte(deleteTestDeck), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	progressPath := filepath.Join(dir, "progress.json")
+	store := storage.NewJSONStore(progressPath)
+	if err := store.Save(storage.ProgressFile{
+		CurrentExerciseID: "go-002",
+		Items: map[string]scheduler.Progress{
+			"go-002": {ExerciseID: "go-002", State: scheduler.StateReview, IntervalDays: 3},
+		},
+		Attempts: map[string]string{"go-002": "package exercise\n"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	a := New(Config{
+		ExerciseDir:  exerciseDir,
+		ProgressPath: progressPath,
+		Stdout:       out,
+		Stdin:        strings.NewReader(answer),
+	})
+	return a, exerciseDir, progressPath
+}
+
+func TestDeleteRemovesTheExerciseAndItsProgress(t *testing.T) {
+	var out strings.Builder
+	a, exerciseDir, progressPath := newDeleteTestApp(t, "y\n", &out)
+
+	if err := a.Delete(context.Background(), "go-002"); err != nil {
+		t.Fatal(err)
+	}
+
+	remaining, err := exercise.LoadDir(exerciseDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(remaining) != 1 || remaining[0].ID != "go-001" {
+		t.Fatalf("remaining exercises = %d, want just go-001", len(remaining))
+	}
+
+	progress, err := storage.NewJSONStore(progressPath).Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := progress.Items["go-002"]; ok {
+		t.Error("review history for the deleted exercise is still stored")
+	}
+	if _, ok := progress.Attempts["go-002"]; ok {
+		t.Error("saved attempt for the deleted exercise is still stored")
+	}
+	if progress.CurrentExerciseID != "" {
+		t.Errorf("CurrentExerciseID = %q, want it cleared", progress.CurrentExerciseID)
+	}
+}
+
+func TestDeleteDoesNothingWhenNotConfirmed(t *testing.T) {
+	var out strings.Builder
+	a, exerciseDir, progressPath := newDeleteTestApp(t, "n\n", &out)
+
+	if err := a.Delete(context.Background(), "go-002"); err != nil {
+		t.Fatal(err)
+	}
+
+	remaining, err := exercise.LoadDir(exerciseDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(remaining) != 2 {
+		t.Fatalf("remaining exercises = %d, want both kept", len(remaining))
+	}
+	progress, err := storage.NewJSONStore(progressPath).Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := progress.Items["go-002"]; !ok {
+		t.Error("review history was cleared despite the delete being declined")
+	}
+	if !strings.Contains(out.String(), "Nothing was deleted") {
+		t.Errorf("output does not say nothing happened:\n%s", out.String())
+	}
+}
+
+func TestDeleteWithNoAnswerAvailableIsDeclined(t *testing.T) {
+	var out strings.Builder
+	a, exerciseDir, _ := newDeleteTestApp(t, "", &out)
+
+	if err := a.Delete(context.Background(), "go-002"); err != nil {
+		t.Fatal(err)
+	}
+
+	remaining, err := exercise.LoadDir(exerciseDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(remaining) != 2 {
+		t.Fatalf("remaining exercises = %d, want both kept when nobody can confirm", len(remaining))
+	}
+}
+
+func TestDeleteReportsAnUnknownID(t *testing.T) {
+	var out strings.Builder
+	a, _, _ := newDeleteTestApp(t, "y\n", &out)
+
+	if err := a.Delete(context.Background(), "go-999"); err == nil {
+		t.Fatal("Delete() returned no error for an unknown id")
+	}
+}
+
+func TestResetClearsTheSavedAttemptButKeepsProgress(t *testing.T) {
+	var out strings.Builder
+	a, _, progressPath := newDeleteTestApp(t, "", &out)
+
+	if err := a.Reset(context.Background(), "go-002"); err != nil {
+		t.Fatal(err)
+	}
+
+	progress, err := storage.NewJSONStore(progressPath).Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := progress.Attempts["go-002"]; ok {
+		t.Error("saved attempt was not cleared")
+	}
+	if _, ok := progress.Items["go-002"]; !ok {
+		t.Error("review history was cleared but should have been kept")
+	}
+	if progress.CurrentExerciseID != "go-002" {
+		t.Errorf("CurrentExerciseID = %q, want it kept as go-002", progress.CurrentExerciseID)
+	}
+	if !strings.Contains(out.String(), "Cleared your saved attempt") {
+		t.Errorf("output does not confirm the reset:\n%s", out.String())
+	}
+}
+
+func TestResetWithNoIDClearsTheCurrentExercise(t *testing.T) {
+	var out strings.Builder
+	a, _, progressPath := newDeleteTestApp(t, "", &out)
+
+	// newDeleteTestApp marks go-002 as the current exercise; an empty id
+	// should target it without the caller naming it.
+	if err := a.Reset(context.Background(), ""); err != nil {
+		t.Fatal(err)
+	}
+
+	progress, err := storage.NewJSONStore(progressPath).Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := progress.Attempts["go-002"]; ok {
+		t.Error("saved attempt for the current exercise was not cleared")
+	}
+	if !strings.Contains(out.String(), "go-002") {
+		t.Errorf("output should name the reset exercise:\n%s", out.String())
+	}
+}
+
+func TestResetWithNoIDAndNothingInProgress(t *testing.T) {
+	var out strings.Builder
+	a, _, progressPath := newDeleteTestApp(t, "", &out)
+
+	store := storage.NewJSONStore(progressPath)
+	progress, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	progress.CurrentExerciseID = ""
+	if err := store.Save(progress); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := a.Reset(context.Background(), ""); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "No exercise is in progress") {
+		t.Errorf("output should explain there is nothing in progress:\n%s", out.String())
+	}
+	// A saved attempt still exists, but with no target it must be left alone.
+	after, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := after.Attempts["go-002"]; !ok {
+		t.Error("a no-op reset should not have touched the stored attempt")
+	}
+}
+
+func TestResetWithNoSavedAttemptReportsNothingToDo(t *testing.T) {
+	var out strings.Builder
+	a, _, progressPath := newDeleteTestApp(t, "", &out)
+
+	// go-001 has no stored attempt.
+	if err := a.Reset(context.Background(), "go-001"); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "nothing to reset") {
+		t.Errorf("output does not say there was nothing to reset:\n%s", out.String())
+	}
+
+	// The unrelated saved attempt for go-002 must be left intact.
+	progress, err := storage.NewJSONStore(progressPath).Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := progress.Attempts["go-002"]; !ok {
+		t.Error("resetting go-001 disturbed the saved attempt for go-002")
+	}
+}
+
+func TestResetReportsAnUnknownID(t *testing.T) {
+	var out strings.Builder
+	a, _, _ := newDeleteTestApp(t, "", &out)
+
+	if err := a.Reset(context.Background(), "go-999"); err == nil {
+		t.Fatal("Reset() returned no error for an unknown id")
 	}
 }
 
@@ -57,11 +405,101 @@ func TestReviewStatus(t *testing.T) {
 	if got, want := reviewStatus(scheduler.Progress{}, false, now), "new"; got != want {
 		t.Fatalf("reviewStatus() = %q, want %q", got, want)
 	}
-	if got, want := reviewStatus(scheduler.Progress{DueAt: now.Add(24 * time.Hour)}, true, now), "due 2026-07-02"; got != want {
+	reviewCard := scheduler.Progress{State: scheduler.StateReview, IntervalDays: 1}
+	reviewCard.DueAt = now.Add(24 * time.Hour)
+	if got, want := reviewStatus(reviewCard, true, now), "due 2026-07-02"; got != want {
 		t.Fatalf("reviewStatus() = %q, want %q", got, want)
 	}
-	if got, want := reviewStatus(scheduler.Progress{DueAt: now.Add(-time.Hour)}, true, now), "due now"; got != want {
+	reviewCard.DueAt = now.Add(-time.Hour)
+	if got, want := reviewStatus(reviewCard, true, now), "due now"; got != want {
 		t.Fatalf("reviewStatus() = %q, want %q", got, want)
+	}
+	learningCard := scheduler.Progress{State: scheduler.StateLearning, DueAt: now.Add(10 * time.Minute)}
+	if got, want := reviewStatus(learningCard, true, now), "learning (due 12:10)"; got != want {
+		t.Fatalf("reviewStatus() = %q, want %q", got, want)
+	}
+	relearningCard := scheduler.Progress{State: scheduler.StateRelearning, DueAt: now.Add(-time.Minute)}
+	if got, want := reviewStatus(relearningCard, true, now), "relearning (due now)"; got != want {
+		t.Fatalf("reviewStatus() = %q, want %q", got, want)
+	}
+}
+
+func TestPromptRatingShowsPreviewsAndParsesAgain(t *testing.T) {
+	now := time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC)
+	var out strings.Builder
+	a := New(Config{
+		Stdout: &out,
+		Stdin:  strings.NewReader("a\n"),
+		Now:    func() time.Time { return now },
+	})
+	item := scheduler.Progress{ExerciseID: "go-001", State: scheduler.StateReview, IntervalDays: 10, EaseFactor: 2.5, DueAt: now}
+
+	if got := a.promptRating(now, item); got != scheduler.Again {
+		t.Fatalf("promptRating() = %q, want again", got)
+	}
+	prompt := out.String()
+	for _, want := range []string{"[a]gain 10m", "[h]ard 12d", "[g]ood 25d", "[e]asy 33d"} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("prompt missing %q:\n%s", want, prompt)
+		}
+	}
+}
+
+func TestPromptRatingWarnsAndRetriesOnInvalidInput(t *testing.T) {
+	now := time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC)
+	var out strings.Builder
+	a := New(Config{
+		Stdout: &out,
+		Stdin:  strings.NewReader("banana\nh\n"),
+		Now:    func() time.Time { return now },
+	})
+	item := scheduler.Progress{ExerciseID: "go-001", State: scheduler.StateReview, IntervalDays: 10, EaseFactor: 2.5, DueAt: now}
+
+	if got := a.promptRating(now, item); got != scheduler.Hard {
+		t.Fatalf("promptRating() = %q, want hard after retry", got)
+	}
+	prompt := out.String()
+	if !strings.Contains(prompt, `Unknown rating "banana"`) {
+		t.Fatalf("prompt missing warning about invalid input:\n%s", prompt)
+	}
+	if strings.Count(prompt, "Rate this review") != 2 {
+		t.Fatalf("prompt should be shown twice (initial + retry):\n%s", prompt)
+	}
+}
+
+func TestPromptRatingRejectsEmptyInput(t *testing.T) {
+	now := time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC)
+	var out strings.Builder
+	a := New(Config{
+		Stdout: &out,
+		Stdin:  strings.NewReader("\ne\n"),
+		Now:    func() time.Time { return now },
+	})
+	item := scheduler.Progress{ExerciseID: "go-001", State: scheduler.StateReview, IntervalDays: 10, EaseFactor: 2.5, DueAt: now}
+
+	if got := a.promptRating(now, item); got != scheduler.Easy {
+		t.Fatalf("promptRating() = %q, want easy after empty input is rejected", got)
+	}
+	prompt := out.String()
+	if !strings.Contains(prompt, "A rating is required") {
+		t.Fatalf("prompt missing warning about empty input:\n%s", prompt)
+	}
+	if strings.Count(prompt, "Rate this review") != 2 {
+		t.Fatalf("prompt should be shown twice (initial + retry):\n%s", prompt)
+	}
+}
+
+func TestPromptRatingDefaultsToGoodWhenInputRunsOut(t *testing.T) {
+	now := time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC)
+	a := New(Config{
+		Stdout: &strings.Builder{},
+		Stdin:  strings.NewReader(""),
+		Now:    func() time.Time { return now },
+	})
+	item := scheduler.Progress{ExerciseID: "go-001", State: scheduler.StateReview, IntervalDays: 10, EaseFactor: 2.5, DueAt: now}
+
+	if got := a.promptRating(now, item); got != scheduler.Good {
+		t.Fatalf("promptRating() = %q, want good on EOF", got)
 	}
 }
 
@@ -73,7 +511,7 @@ func TestWriteStarterPrependsInstructions(t *testing.T) {
 		StarterCode: "package exercise\n\nfunc Hello(name string) string { return \"\" }\n",
 	}
 
-	path, cleanup, err := writeStarter(ex, "")
+	path, cleanup, err := writeStarter(ex, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +549,7 @@ func TestWriteStarterRestoresPreviousAttempt(t *testing.T) {
 	}
 	previousAttempt := "package exercise\n\nfunc Hello(name string) string {\n\treturn \"partial attempt\"\n}\n"
 
-	path, cleanup, err := writeStarter(ex, previousAttempt)
+	path, cleanup, err := writeStarter(ex, previousAttempt, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -133,7 +571,7 @@ func TestStarterInstructionsIncludeRequiredTypesAndMethods(t *testing.T) {
 		StarterCode: "package exercise\n\ntype Rectangle struct {\n\tWidth float64\n\tHeight float64\n}\n\nfunc (r Rectangle) Area() float64 {\n\treturn 0\n}\n",
 	}
 
-	got := starterWithInstructions(ex)
+	got := starterWithInstructions(ex, "")
 	for _, want := range []string{
 		"// Implement: a struct type called \"Rectangle\" with a field called \"Width\" of type float64 and a field called \"Height\" of type float64",
 		"// Implement: a method called \"Area\" on Rectangle, receives no parameters, and returns a float64",
@@ -156,7 +594,7 @@ func TestStarterInstructionsForTestWritingUseGivenPrefix(t *testing.T) {
 		SubjectCode: "package exercise\n\nfunc Double(n int) int {\n\treturn n * 2\n}\n",
 	}
 
-	got := starterWithInstructions(ex)
+	got := starterWithInstructions(ex, "")
 	for _, want := range []string{
 		"// Given: a function called \"Double\", receives a parameter called \"n\" of type int, and returns an int",
 		"// Write: one or more functions whose names start with \"Test\", each receiving a parameter called \"t\" of type pointer to testing.T and returning nothing",
@@ -173,6 +611,29 @@ func TestStarterInstructionsForTestWritingUseGivenPrefix(t *testing.T) {
 	}
 }
 
+func TestStarterInstructionsIncludeRequiredTestFeatures(t *testing.T) {
+	ex := exercise.Exercise{
+		Title:                "Test FizzBuzz with named subtests",
+		Description:          "Write a test for FizzBuzz.",
+		Kind:                 exercise.KindTestWriting,
+		SubjectCode:          "package exercise\n\nfunc Double(n int) int {\n\treturn n * 2\n}\n",
+		RequiredTestFeatures: []string{exercise.FeatureTable, exercise.FeatureSubtests},
+	}
+
+	got := starterWithInstructions(ex, "")
+	for _, want := range []string{
+		"// Use: a table of test cases driven by a loop",
+		"// Use: named subtests, giving each case its own name",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("starter instructions missing %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "t.Run") {
+		t.Fatalf("starter instructions should not leak Go syntax:\n%s", got)
+	}
+}
+
 func TestChooseNextFallsBackToEarliestFutureDue(t *testing.T) {
 	now := time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC)
 	exercises := []exercise.Exercise{
@@ -186,7 +647,7 @@ func TestChooseNextFallsBackToEarliestFutureDue(t *testing.T) {
 		},
 	}
 
-	got, ok := chooseNext(exercises, progress, now)
+	got, ok := chooseNext(exercises, progress, "go", now)
 	if !ok {
 		t.Fatal("chooseNext returned false")
 	}
@@ -209,11 +670,190 @@ func TestChooseNextKeepsCurrentExerciseUntilSolved(t *testing.T) {
 		},
 	}
 
-	got, ok := chooseNext(exercises, progress, now)
+	got, ok := chooseNext(exercises, progress, "go", now)
 	if !ok {
 		t.Fatal("chooseNext returned false")
 	}
 	if got.ID != "go-001" {
 		t.Fatalf("chosen = %q, want go-001", got.ID)
+	}
+}
+
+func TestWriteStarterUsesAShellFileForShellExercises(t *testing.T) {
+	ex := exercise.Exercise{
+		Title:            "Count the lines",
+		Description:      "Print how many lines access.log has.",
+		Objective:        "Practise the counting command.",
+		Language:         exercise.LanguageShell,
+		RequiredCommands: []string{"wc"},
+	}
+	preview := "The working directory contains:\n    access.log"
+
+	path, cleanup, err := writeStarter(ex, "", preview)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	if got := filepath.Base(path); got != "solution.sh" {
+		t.Errorf("editable file = %q, want solution.sh so the editor knows what it is", got)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(data)
+	for _, want := range []string{
+		"# Count the lines",
+		"# What to do: Print how many lines access.log has.",
+		"# Write: the command line that does this",
+		"# Use: the wc command",
+		"# The working directory contains:",
+		"#     access.log",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("starter file missing %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "//") || strings.Contains(got, "package exercise") {
+		t.Fatalf("shell starter file should carry no Go scaffolding:\n%s", got)
+	}
+}
+
+// Each deck resumes its own half-answered exercise, so an evening on the shell
+// deck does not cost the Go card that was left open.
+func TestChooseNextResumesTheDecksOwnCurrentExercise(t *testing.T) {
+	now := time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC)
+	exercises := []exercise.Exercise{
+		{ID: "sh-001", Difficulty: 1, Language: exercise.LanguageShell},
+		{ID: "sh-002", Difficulty: 2, Language: exercise.LanguageShell},
+	}
+	progress := storage.ProgressFile{
+		CurrentExerciseID: "go-004",
+		Current:           map[string]string{"shell": "sh-002"},
+		Items:             map[string]scheduler.Progress{},
+	}
+
+	got, ok := chooseNext(exercises, progress, "shell", now)
+	if !ok {
+		t.Fatal("chooseNext returned false")
+	}
+	if got.ID != "sh-002" {
+		t.Fatalf("chooseNext() = %q, want the shell deck's own current exercise sh-002", got.ID)
+	}
+}
+
+func TestFailureHeadlineNamesWhatWentWrong(t *testing.T) {
+	cases := map[executor.Status]string{
+		executor.CompileError:   "COMPILE ERROR",
+		executor.TestFailure:    "TEST FAILURE",
+		executor.CommandError:   "COMMAND ERROR",
+		executor.CheckFailure:   "WRONG RESULT",
+		executor.MissingCommand: "WRONG TOOL",
+	}
+	for status, want := range cases {
+		if got := failureHeadline(status); got != want {
+			t.Errorf("failureHeadline(%q) = %q, want %q", status, got, want)
+		}
+	}
+}
+
+func TestDeckReportsTheDefaultWhenGivenNoName(t *testing.T) {
+	var out strings.Builder
+	a := New(Config{ConfigPath: filepath.Join(t.TempDir(), "config.json"), Stdout: &out})
+
+	if err := a.Deck(context.Background(), ""); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"Default deck: go", "go, shell"} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("output missing %q:\n%s", want, out.String())
+		}
+	}
+}
+
+func TestDeckRemembersTheChosenDeck(t *testing.T) {
+	var out strings.Builder
+	path := filepath.Join(t.TempDir(), "config.json")
+	a := New(Config{ConfigPath: path, Stdout: &out})
+
+	if err := a.Deck(context.Background(), exercise.LanguageShell); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "now shell") {
+		t.Errorf("output does not confirm the change:\n%s", out.String())
+	}
+
+	got, err := DefaultDeck(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != exercise.LanguageShell {
+		t.Fatalf("DefaultDeck() = %q, want it read back as shell", got)
+	}
+}
+
+func TestDeckRejectsADeckThatDoesNotExist(t *testing.T) {
+	var out strings.Builder
+	path := filepath.Join(t.TempDir(), "config.json")
+	a := New(Config{ConfigPath: path, Stdout: &out})
+
+	if err := a.Deck(context.Background(), "python"); err == nil {
+		t.Fatal("Deck() accepted a deck that does not exist")
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Error("a rejected deck name should not have been written to the config file")
+	}
+}
+
+func TestDefaultDeckFallsBackForAnUnconfiguredUser(t *testing.T) {
+	got, err := DefaultDeck(filepath.Join(t.TempDir(), "config.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != exercise.LanguageGo {
+		t.Fatalf("DefaultDeck() = %q, want go before anything has been configured", got)
+	}
+}
+
+// A config file naming a deck that no longer exists must not wedge every
+// command; the built-in default takes over.
+func TestDefaultDeckIgnoresADeckThatIsNoLongerServed(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.json")
+	if err := os.WriteFile(path, []byte(`{"default_deck":"cobol"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := DefaultDeck(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != exercise.LanguageGo {
+		t.Fatalf("DefaultDeck() = %q, want the built-in default", got)
+	}
+}
+
+func TestNextKeepsWorkWhenEditorExitsNonZero(t *testing.T) {
+	var out strings.Builder
+	a, _, progressPath := newDeleteTestApp(t, "", &out)
+
+	// Mimic vi exiting 1 after a :wq that followed an error message.
+	written := "package exercise\n\nthis does not compile\n"
+	script := filepath.Join(t.TempDir(), "editor.sh")
+	if err := os.WriteFile(script, []byte("#!/bin/sh\nprintf '%s' '"+written+"' > \"$1\"\nexit 1\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("EDITOR", script)
+
+	if err := a.Next(context.Background()); err != nil {
+		t.Fatalf("Next returned %v, want the edited file evaluated despite the editor's exit status", err)
+	}
+
+	progress, err := storage.NewJSONStore(progressPath).Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := progress.Attempts["go-002"]; got != written {
+		t.Fatalf("saved attempt = %q, want the edited file %q", got, written)
 	}
 }
