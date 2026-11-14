@@ -39,6 +39,9 @@ Present a compact plan as a markdown table, one row per proposed card:
 
 Guidelines for the plan:
 - One primary concept per card; order by difficulty continuing the deck's progression.
+- No fixed card count: propose a card for every concept on the page that is worth drilling. What
+  matters is that no two cards are ambiguous with each other, new or existing: each drills a
+  distinct concept, and no card's instructions can be satisfied by another card's solution.
 - Go deck: mix kinds where the page warrants it, `implementation` for syntax recall and `test_writing` when the page teaches testing. Shell deck cards are all `command`; leave `kind` out.
 - Below the table, list page concepts you deliberately skipped and why (already covered by `go-NNN-…`, or not exercisable).
 
